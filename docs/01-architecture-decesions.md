@@ -262,7 +262,6 @@ K3s lightweight Kubernetes distribution for homelab cluster deployment.
 - **Homelab environment**: Running on Minisforum UM790 Pro with Proxmox (64GB RAM shared across multiple VMs)
 - **Resource constraints**: Need to preserve resources for application workloads (Shlink, Redis, Postgres, observability stack)
 - **Learning goals**: Focus on application architecture, service mesh patterns, and SRE practices - not Kubernetes installation complexity
-- **Timeline pressure**: January 2025 interviews require working system quickly - can't spend weeks on cluster setup
 - **Cloud migration planned**: Will deploy to AWS EKS after homelab validation, demonstrating understanding of both self-managed and managed k8s
 
 ### Alternatives Considered
