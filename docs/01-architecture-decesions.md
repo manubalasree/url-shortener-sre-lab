@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
 **Project:** URL Shortener - SRE Learning Lab
-**Author:** Manu
+**Author:** Manu B Sreekumari
 **Last Updated:** December 26, 2024
 **Status:** Accepted - Ready for Implementation
 
@@ -459,4 +459,4 @@ K3s Cluster (Orchestration Foundation)
 
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
-| 1.0 | 2024-12-26 | Initial architecture decisions | Manu |
+| 1.0 | 2024-12-26 | Initial architecture decisions | Manu B Sreekumari|
