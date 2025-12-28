@@ -21,7 +21,7 @@ spec:
         image:
           registry: docker.io
           repository: bitnami/redis-cluster
-          tag: latest
+          tag: 7.4.2
 
         redis:
           resources:
@@ -41,18 +41,7 @@ spec:
         existingSecret: "redis-password"
 
         metrics:
-          enabled: true
-          image:
-            registry: docker.io
-            repository: bitnami/redis-exporter
-            tag: latest
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
-              memory: "128Mi"
-              cpu: "100m"
+          enabled: false
 
         networkPolicy:
           enabled: false
