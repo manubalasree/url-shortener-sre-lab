@@ -6,48 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://charts.bitnami.com/bitnami
-    chart: redis-cluster
-    targetRevision: 11.0.7
-    helm:
-      releaseName: redis-cluster
-      valueFiles:
-      - values.yaml
-      values: |
-        cluster:
-          nodes: 6
-          replicas: 1
-
-        image:
-          registry: docker.io
-          repository: bitnami/redis-cluster
-          tag: 7.4.2
-
-        redis:
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
-
-        persistence:
-          enabled: true
-          storageClass: "local-path"
-          size: 8Gi
-
-        usePassword: true
-        existingSecret: "redis-password"
-
-        metrics:
-          enabled: false
-
-        networkPolicy:
-          enabled: false
-
-        podSecurityPolicy:
-          create: false
+    repoURL: https://github.com/manubalasree/url-shortener-sre-lab
+    targetRevision: main
+    path: kubernetes/kustomize/redis
   destination:
     server: https://kubernetes.default.svc
     namespace: redis
@@ -57,12 +18,8 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
-    syncWaves:
-      - wave: 10
   ignoreDifferences:
-  - group: apps
-    kind: StatefulSet
+  - group: databases.spotahome.com
+    kind: RedisFailover
     jqPathExpressions:
-    - .spec.volumeClaimTemplates[].apiVersion
-    - .spec.volumeClaimTemplates[].kind
+    - .status
