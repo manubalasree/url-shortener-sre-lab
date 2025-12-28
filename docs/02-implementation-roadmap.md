@@ -581,12 +581,14 @@ Confident discussion of design, implementation, and operational experience.
 
 | Phase | Status | Completion Date | Notes |
 |-------|--------|-----------------|-------|
-| Phase 1.1: VM Preparation | Not Started | | |
-| Phase 1.2: System Prep | Not Started | | |
-| Phase 1.3: K3s Installation | Not Started | | |
-| Phase 1.4: Storage/Network | Not Started | | |
-| Phase 2.1: PostgreSQL | Not Started | | |
-| Phase 2.2: Redis | Not Started | | |
+| Phase 1.1: VM Preparation | ✅ Complete | 2024-12-27 | 3 VMs created with Ubuntu 24.04, IPs: 242-244 |
+| Phase 1.2: System Prep | ✅ Complete | 2024-12-27 | All nodes updated, swap disabled, kernel configured |
+| Phase 1.3: K3s Installation | ✅ Complete | 2024-12-27 | 3-node HA cluster with embedded etcd |
+| Phase 1.4: Storage/Network | ✅ Complete | 2024-12-27 | local-path storage, Flannel CNI, Traefik disabled |
+| Phase 1.5: ArgoCD Setup | ✅ Complete | 2024-12-28 | ArgoCD installed, root-app deployed |
+| Phase 2.1: PostgreSQL Operator | ✅ Complete | 2024-12-28 | Crunchy PGO v6.0.0 via ArgoCD |
+| Phase 2.2: PostgreSQL Cluster | ✅ Complete | 2024-12-28 | shlink-db deployed, 20Gi storage |
+| Phase 2.3: Redis | 🔄 Next | | |
 | Phase 3.1: Shlink Config | Not Started | | |
 | Phase 3.2: Shlink Deploy | Not Started | | |
 | Phase 4.1: Istio Install | Not Started | | |
@@ -610,18 +612,40 @@ Track decisions made during implementation that weren't covered in original ADR:
 |------|----------|-----------|--------|
 | 2024-12-27 | Ubuntu 24.04 selected | Latest LTS, good K8s support | Baseline established |
 | 2024-12-27 | Shlink confirmed as app | Per ADR, avoid building from scratch | Faster to production |
-| TBD | K3s topology (HA vs 1+2) | [Pending decision] | Affects cluster setup complexity |
-| TBD | PostgreSQL deployment method | [Operator vs StatefulSet] | Affects operational complexity |
+| 2024-12-27 | K3s: 3 control planes (HA) | Better for SRE learning, HA experience | Production-like setup |
+| 2024-12-27 | Network: Bridge mode, static IPs | Simplest for homelab access | Easy demo/testing access |
+| 2024-12-28 | GitOps: ArgoCD with app-of-apps | Modern deployment pattern | Full GitOps workflow |
+| 2024-12-28 | PostgreSQL: Crunchy PGO operator | Production-grade, auto-management | Operator experience gained |
+| 2024-12-28 | Postgres fork used | Control over operator version | Can customize if needed |
 | TBD | Redis topology | [Cluster vs single instance] | Affects HA and complexity |
 
 ---
 
 ## Next Immediate Actions
 
-**YOU ARE HERE:**
+**YOU ARE HERE: Phase 2.3 - Redis Deployment**
 
-1. Create 3 VMs in Proxmox with Ubuntu 24.04
-2. Decide on network configuration (bridge/NAT/VLAN)
-3. Decide on K3s topology (3 control planes vs 1+2)
+**Completed So Far:**
+- ✅ 3-node K3s HA cluster operational
+- ✅ ArgoCD GitOps platform deployed
+- ✅ PostgreSQL operator and cluster running
+- ✅ Database ready for Shlink application
 
-**Come back to this document after each step to validate and update status.**
+**Next Steps:**
+1. **Deploy Redis** - Cache layer for URL lookups
+   - Decision needed: Redis cluster vs single instance
+   - Create kustomize manifests
+   - Create ArgoCD Application
+   - Validate deployment
+
+2. **Deploy Shlink** - URL shortener application
+   - Configure connection to Postgres and Redis
+   - Deploy via ArgoCD
+   - Test URL creation and redirection
+
+3. **Add Istio** - Service mesh for traffic management
+   - Install Istio operator
+   - Enable sidecar injection
+   - Configure ingress gateway
+
+**Estimated Progress: ~40% Complete (Phases 1 & 2 done)**
