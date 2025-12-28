@@ -1,0 +1,70 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: redis-cluster
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    chart: redis-cluster
+    targetRevision: 11.0.7
+    helm:
+      releaseName: redis-cluster
+      valueFiles:
+      - values.yaml
+      values: |
+        cluster:
+          nodes: 6
+          replicas: 1
+
+        redis:
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+        persistence:
+          enabled: true
+          storageClass: "local-path"
+          size: 8Gi
+
+        usePassword: true
+        existingSecret: "redis-password"
+
+        metrics:
+          enabled: true
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+
+        networkPolicy:
+          enabled: false
+
+        podSecurityPolicy:
+          create: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: redis
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    syncWaves:
+      - wave: 10
+  ignoreDifferences:
+  - group: apps
+    kind: StatefulSet
+    jqPathExpressions:
+    - .spec.volumeClaimTemplates[].apiVersion
+    - .spec.volumeClaimTemplates[].kind
