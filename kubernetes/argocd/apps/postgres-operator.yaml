@@ -8,7 +8,7 @@ spec:
 
   source:
     repoURL: https://github.com/manubalasree/postgres-operator
-    targetRevision: master
+    targetRevision: main
     path: config/default
 
   destination:
