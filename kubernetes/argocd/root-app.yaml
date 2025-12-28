@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: postgres-cluster
+  name: root-app
   namespace: argocd
 spec:
   project: default
@@ -9,11 +9,13 @@ spec:
   source:
     repoURL: https://github.com/manubalasree/url-shortener-sre-lab
     targetRevision: main
-    path: kubernetes/kustomize/postgres
+    path: kubernetes/argocd/apps
+    directory:
+      recurse: true
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: postgres
+    namespace: argocd
 
   syncPolicy:
     automated:
@@ -21,16 +23,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-    retry:
-      limit: 7
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
-
-  # Wait for operator to be ready before deploying cluster
-  ignoreDifferences:
-  - group: postgres-operator.crunchydata.com
-    kind: PostgresCluster
-    jsonPointers:
-    - /status

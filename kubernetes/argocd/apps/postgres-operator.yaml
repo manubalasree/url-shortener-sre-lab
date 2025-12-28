@@ -23,7 +23,7 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
     retry:
-      limit: 5
+      limit: 7
       backoff:
         duration: 5s
         factor: 2
