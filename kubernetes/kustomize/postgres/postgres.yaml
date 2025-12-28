@@ -1,4 +1,4 @@
-apiVersion: postgres.crunchydata.com/v1
+apiVersion: postgres-operator.crunchydata.com/v1beta1
 kind: PostgresCluster
 metadata:
   name: shlink-db

@@ -32,5 +32,5 @@ spec:
   ignoreDifferences:
   - group: postgres-operator.crunchydata.com
     kind: PostgresCluster
-    jsonPointers:
-    - /status
+    jqPathExpressions:
+    - .status
