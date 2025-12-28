@@ -1,0 +1,31 @@
+apiVersion: postgres.crunchydata.com/v1
+kind: PostgresCluster
+metadata:
+  name: shlink-db
+  annotations:
+    postgres.crunchydata.com/autoCreateUserSchema: "true"
+spec:
+  postgresVersion: 18
+  users:
+    - name: shlink
+      databases:
+        - shlink
+  instances:
+    - name: instance1
+      dataVolumeClaimSpec:
+        accessModes:
+        - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: 20Gi
+  backups:
+    pgbackrest:
+      repos:
+      - name: repo1
+        volume:
+          volumeClaimSpec:
+            accessModes:
+            - "ReadWriteOnce"
+            resources:
+              requests:
+                storage: 20Gi
