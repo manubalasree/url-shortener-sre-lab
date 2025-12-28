@@ -21,7 +21,7 @@ spec:
         image:
           registry: docker.io
           repository: bitnami/redis-cluster
-          tag: 7.4.1-debian-12-r2
+          tag: latest
 
         redis:
           resources:
@@ -45,7 +45,7 @@ spec:
           image:
             registry: docker.io
             repository: bitnami/redis-exporter
-            tag: 1.63.0-debian-12-r2
+            tag: latest
           resources:
             requests:
               memory: "64Mi"
