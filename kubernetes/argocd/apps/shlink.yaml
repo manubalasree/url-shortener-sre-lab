@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shlink
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/manubalasree/url-shortener-sre-lab
+    targetRevision: main
+    path: kubernetes/kustomize/shlink
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shlink
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
