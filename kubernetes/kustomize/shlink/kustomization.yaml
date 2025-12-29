@@ -5,3 +5,5 @@ namespace: shlink
 resources:
 - deployment.yaml
 - service.yaml
+- secret-store.yaml
+- external-secret.yaml
