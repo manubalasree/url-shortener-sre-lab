@@ -26,12 +26,12 @@ This document captures the integration experience of deploying Shlink with:
 
 ### Key Takeaways
 
-✅ **What Works**:
+**What Works**:
 - Shlink + PostgreSQL with proper schema permissions
 - Vault-based secret management via External Secrets Operator
 - StatefulSet DNS with headless services for Redis pods
 
-⚠️ **Current Limitations**:
+**Current Limitations**:
 - Redis integration temporarily disabled due to Predis library compatibility issues with Redis Sentinel/Failover setup
 - Requires manual PostgreSQL schema permission grants
 
@@ -274,12 +274,12 @@ in /etc/shlink/vendor/symfony/cache/Traits/RedisTrait.php:613
 **Decision**: Temporarily remove Redis configuration until compatibility is resolved.
 
 **Impact**:
-- ✅ Application runs successfully with PostgreSQL only
-- ✅ All database migrations complete
-- ✅ Health checks pass
-- ⚠️ No distributed locking (single-instance locks only)
-- ⚠️ No caching layer (impacts performance under load)
-- ⚠️ No pub/sub for real-time updates
+- Application runs successfully with PostgreSQL only
+- All database migrations complete
+- Health checks pass
+- No distributed locking (single-instance locks only)
+- No caching layer (impacts performance under load)
+- No pub/sub for real-time updates
 
 ### Future Redis Integration Options
 
@@ -652,10 +652,10 @@ kubectl logs -n shlink deployment/shlink --tail=100
 ```
 
 **Common causes**:
-- ❌ Database connection failure → Check PostgreSQL service DNS
-- ❌ Schema permission denied → Grant `GRANT ALL ON SCHEMA public TO shlink`
-- ❌ Redis connection errors → Disable Redis temporarily
-- ❌ Secret not found → Check ExternalSecret sync status
+- Database connection failure → Check PostgreSQL service DNS
+- Schema permission denied → Grant `GRANT ALL ON SCHEMA public TO shlink`
+- Redis connection errors → Disable Redis temporarily
+- Secret not found → Check ExternalSecret sync status
 
 #### 2. Database Migration Failures
 
@@ -866,10 +866,10 @@ seal "awskms" {
 **Lesson**: Trying to integrate PostgreSQL + Redis + Vault simultaneously made troubleshooting difficult.
 
 **Better Approach**:
-1. ✅ Deploy Shlink with PostgreSQL only
-2. ✅ Verify health and basic functionality
-3. ✅ Add Vault for secrets management
-4. ✅ Integrate Redis after application is stable
+1. Deploy Shlink with PostgreSQL only
+2. Verify health and basic functionality
+3. Add Vault for secrets management
+4. Integrate Redis after application is stable
 
 **Benefit**: Isolate variables, faster debugging, clear baseline.
 
@@ -973,4 +973,4 @@ readinessProbe:
 
 **Document Version**: 1.0
 **Last Updated**: 2025-12-29
-**Maintainer**: SRE Team
+**Maintainer**: Manu B Sreekumari
