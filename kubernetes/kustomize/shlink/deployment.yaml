@@ -23,6 +23,8 @@ spec:
           name: http
           protocol: TCP
         env:
+        - name: SHELL_VERBOSITY
+          value: "3"
         - name: DEFAULT_DOMAIN
           value: "shlink.local"
         - name: IS_HTTPS_ENABLED
