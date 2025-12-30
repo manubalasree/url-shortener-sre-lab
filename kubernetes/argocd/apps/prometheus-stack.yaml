@@ -32,6 +32,46 @@ spec:
           persistence:
             enabled: true
             size: 5Gi
+          sidecar:
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              searchNamespace: ALL
+          dashboardProviders:
+            dashboardproviders.yaml:
+              apiVersion: 1
+              providers:
+                - name: 'istio'
+                  orgId: 1
+                  folder: 'Istio'
+                  type: file
+                  disableDeletion: false
+                  editable: true
+                  options:
+                    path: /var/lib/grafana/dashboards/istio
+          dashboards:
+            istio:
+              istio-mesh:
+                gnetId: 7639
+                revision: 223
+                datasource: Prometheus
+              istio-service:
+                gnetId: 7636
+                revision: 223
+                datasource: Prometheus
+              istio-workload:
+                gnetId: 7630
+                revision: 223
+                datasource: Prometheus
+              istio-performancebencher:
+                gnetId: 11829
+                revision: 223
+                datasource: Prometheus
+              istio-control-plane:
+                gnetId: 7645
+                revision: 223
+                datasource: Prometheus
         alertmanager:
           enabled: false
         kubeStateMetrics:
