@@ -12,8 +12,9 @@
 4. [Redis Integration Challenges](#redis-integration-challenges)
 5. [Vault Secrets Management](#vault-secrets-management)
 6. [Deployment Configuration](#deployment-configuration)
-7. [Troubleshooting Guide](#troubleshooting-guide)
-8. [Lessons Learned](#lessons-learned)
+7. [Istio Service Mesh Integration](#istio-service-mesh-integration)
+8. [Troubleshooting Guide](#troubleshooting-guide)
+9. [Lessons Learned](#lessons-learned)
 
 ---
 
@@ -23,6 +24,7 @@ This document captures the integration experience of deploying Shlink with:
 - **PostgreSQL** (via Crunchy Data Operator) for persistent storage
 - **Redis** (via Spotahome Operator) for caching and distributed locks
 - **HashiCorp Vault** (via External Secrets Operator) for secrets management
+- **Istio Service Mesh** for traffic management, observability, and security
 
 ### Key Takeaways
 
@@ -30,6 +32,8 @@ This document captures the integration experience of deploying Shlink with:
 - Shlink + PostgreSQL with proper schema permissions
 - Vault-based secret management via External Secrets Operator
 - StatefulSet DNS with headless services for Redis pods
+- Istio service mesh with ingress gateway and traffic routing
+- Full Shlink functionality via Istio (API, redirects, analytics)
 
 **Current Limitations**:
 - Redis integration temporarily disabled due to Predis library compatibility issues with Redis Sentinel/Failover setup
@@ -637,6 +641,566 @@ spec:
 | `REDIS_SERVERS` | (disabled) | Redis connection string |
 | `REDIS_SENTINEL_SERVICE` | (not used) | Sentinel master name |
 | `GEOLITE_LICENSE_KEY` | `""` | GeoIP license (optional) |
+
+---
+
+## Istio Service Mesh Integration
+
+**Date Added**: 2025-12-30
+**Istio Version**: 1.24.2
+
+### Overview
+
+Istio service mesh was deployed to provide:
+- **Traffic management**: Ingress gateway for external access
+- **Observability**: Request tracing and metrics collection
+- **Security**: mTLS for pod-to-pod communication
+- **Resilience**: Circuit breaking, retries, and timeout policies
+
+### Architecture
+
+```
+                    External Traffic
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │ Istio Ingress   │
+                  │    Gateway      │
+                  │ (LoadBalancer)  │
+                  └────────┬────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │     Gateway     │
+                  │   (port 80)     │
+                  └────────┬────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │ VirtualService  │
+                  │  (routing)      │
+                  └────────┬────────┘
+                           │
+                           ▼
+        ┌──────────────────┼──────────────────┐
+        ▼                  ▼                  ▼
+   ┌────────┐         ┌────────┐         ┌────────┐
+   │Shlink-1│         │Shlink-2│         │Shlink-3│
+   │┌──────┐│         │┌──────┐│         │┌──────┐│
+   ││ App  ││         ││ App  ││         ││ App  ││
+   │└──────┘│         │└──────┘│         │└──────┘│
+   │┌──────┐│         │┌──────┐│         │┌──────┐│
+   ││Envoy ││         ││Envoy ││         ││Envoy ││
+   ││Proxy ││         ││Proxy ││         ││Proxy ││
+   │└──────┘│         │└──────┘│         │└──────┘│
+   └────────┘         └────────┘         └────────┘
+```
+
+### Installation Steps
+
+#### 1. Install Istio
+
+**Download Istio**:
+```bash
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.24.2 sh -
+cd istio-1.24.2
+```
+
+**Pre-installation Check**:
+```bash
+export KUBECONFIG=~/.kube/config-k3s
+./bin/istioctl x precheck
+```
+
+**Install with Default Profile**:
+```bash
+./bin/istioctl install --set profile=default -y
+```
+
+**Verify Installation**:
+```bash
+kubectl get pods -n istio-system
+kubectl get svc -n istio-system
+```
+
+Expected output:
+```
+NAME                                    READY   STATUS    RESTARTS   AGE
+istio-ingressgateway-xxxxx              1/1     Running   0          2m
+istiod-xxxxx                            1/1     Running   0          2m
+
+NAME                   TYPE           EXTERNAL-IP       PORT(S)
+istio-ingressgateway   LoadBalancer   192.168.2.242     15021:xxx/TCP,80:xxx/TCP,443:xxx/TCP
+istiod                 ClusterIP      10.43.55.241      15010/TCP,15012/TCP,443/TCP,15014/TCP
+```
+
+#### 2. Enable Sidecar Injection
+
+**Label the Namespace**:
+```bash
+kubectl label namespace shlink istio-injection=enabled --overwrite
+```
+
+**Restart Shlink Deployment**:
+```bash
+kubectl rollout restart deployment/shlink -n shlink
+```
+
+**Verify Sidecars Injected**:
+```bash
+kubectl get pods -n shlink
+```
+
+Expected: Each pod should show `2/2` containers (app + Envoy sidecar)
+```
+NAME                      READY   STATUS    RESTARTS   AGE
+shlink-xxxxx              2/2     Running   0          1m
+shlink-xxxxx              2/2     Running   0          1m
+shlink-xxxxx              2/2     Running   0          1m
+```
+
+#### 3. Create Gateway Configuration
+
+**File**: `kubernetes/kustomize/shlink/istio/gateway.yaml`
+
+```yaml
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: shlink-gateway
+  namespace: shlink
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+```
+
+**Key Points**:
+- `selector: istio: ingressgateway` - Uses the default Istio ingress gateway
+- `hosts: "*"` - Accepts all hostnames (for testing; use specific domain in production)
+- Port 80 for HTTP traffic
+
+#### 4. Create VirtualService Configuration
+
+**File**: `kubernetes/kustomize/shlink/istio/virtualservice.yaml`
+
+```yaml
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: shlink-virtualservice
+  namespace: shlink
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - shlink-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: shlink.shlink.svc.cluster.local
+        port:
+          number: 8080
+```
+
+**Key Points**:
+- `gateways: shlink-gateway` - Binds to the Gateway resource
+- `destination: shlink.shlink.svc.cluster.local` - Routes to Shlink Kubernetes service
+- Port 8080 matches Shlink's container port
+
+#### 5. Update Kustomization
+
+**File**: `kubernetes/kustomize/shlink/kustomization.yaml`
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: shlink
+
+resources:
+- deployment.yaml
+- service.yaml
+- secret-store.yaml
+- external-secret.yaml
+- istio/gateway.yaml           # Added
+- istio/virtualservice.yaml    # Added
+```
+
+#### 6. Deploy via kubectl
+
+```bash
+kubectl apply -f kubernetes/kustomize/shlink/istio/gateway.yaml
+kubectl apply -f kubernetes/kustomize/shlink/istio/virtualservice.yaml
+```
+
+**Note**: For full GitOps, these should be managed by ArgoCD. The manual apply is for initial setup.
+
+#### 7. Verify Istio Resources
+
+```bash
+kubectl get gateway,virtualservice -n shlink
+```
+
+Expected output:
+```
+NAME                                         AGE
+gateway.networking.istio.io/shlink-gateway   1m
+
+NAME                                                       GATEWAYS             HOSTS   AGE
+virtualservice.networking.istio.io/shlink-virtualservice   ["shlink-gateway"]   ["*"]   1m
+```
+
+### Testing Shlink via Istio
+
+#### Get Ingress Gateway IP
+
+```bash
+export INGRESS_IP=$(kubectl get svc -n istio-system istio-ingressgateway \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo $INGRESS_IP
+# Output: 192.168.2.242
+```
+
+#### Test Health Endpoint
+
+```bash
+curl http://$INGRESS_IP/rest/health | jq .
+```
+
+Expected response:
+```json
+{
+  "status": "pass",
+  "version": "4.6.0",
+  "links": {
+    "about": "https://shlink.io",
+    "project": "https://github.com/shlinkio/shlink"
+  }
+}
+```
+
+#### Generate API Key
+
+```bash
+kubectl exec -n shlink deployment/shlink -- bin/cli api-key:generate
+```
+
+Save the generated API key (e.g., `909581e3-e271-4ea7-ad1a-734f2f834ae6`)
+
+#### Create Short URL
+
+```bash
+export API_KEY="909581e3-e271-4ea7-ad1a-734f2f834ae6"
+
+curl -X POST http://$INGRESS_IP/rest/v3/short-urls \
+  -H "X-Api-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "longUrl": "https://github.com/shlinkio/shlink",
+    "customSlug": "gh-shlink"
+  }' | jq .
+```
+
+Expected response:
+```json
+{
+  "shortUrl": "http://shlink.local/gh-shlink",
+  "shortCode": "gh-shlink",
+  "longUrl": "https://github.com/shlinkio/shlink",
+  "dateCreated": "2025-12-30T03:00:09+00:00",
+  "visitsSummary": {
+    "total": 0,
+    "nonBots": 0,
+    "bots": 0
+  }
+}
+```
+
+#### Test URL Redirection
+
+```bash
+curl -I http://$INGRESS_IP/gh-shlink
+```
+
+Expected response:
+```
+HTTP/1.1 302 Found
+location: https://github.com/shlinkio/shlink
+x-envoy-upstream-service-time: 58
+server: istio-envoy
+```
+
+#### Check Visit Statistics
+
+```bash
+curl http://$INGRESS_IP/rest/v3/short-urls/gh-shlink/visits \
+  -H "X-Api-Key: $API_KEY" | jq '.visits.pagination.totalItems'
+```
+
+### Traffic Management Features
+
+#### Add Retry Policy
+
+Update VirtualService to add automatic retries:
+
+```yaml
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: shlink-virtualservice
+  namespace: shlink
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - shlink-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: shlink.shlink.svc.cluster.local
+        port:
+          number: 8080
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+```
+
+#### Add Request Timeout
+
+```yaml
+    timeout: 10s
+```
+
+#### Add Circuit Breaker
+
+Create a DestinationRule:
+
+```yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: shlink-circuit-breaker
+  namespace: shlink
+spec:
+  host: shlink.shlink.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 2
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+```
+
+### Security Configuration
+
+#### Enable mTLS
+
+Create PeerAuthentication for mutual TLS:
+
+```yaml
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: shlink-mtls
+  namespace: shlink
+spec:
+  mtls:
+    mode: STRICT
+```
+
+This enforces encrypted communication between Shlink pods.
+
+#### Add Authorization Policy
+
+Restrict access to specific paths:
+
+```yaml
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: shlink-authz
+  namespace: shlink
+spec:
+  selector:
+    matchLabels:
+      app: shlink
+  rules:
+  - to:
+    - operation:
+        paths: ["/rest/*"]
+    when:
+    - key: request.headers[x-api-key]
+      values: ["*"]  # Requires API key header
+```
+
+### Observability
+
+#### View Istio Metrics
+
+```bash
+kubectl exec -n shlink deployment/shlink -c istio-proxy -- \
+  curl -s localhost:15000/stats/prometheus | grep istio
+```
+
+#### Check Envoy Configuration
+
+```bash
+./istio-1.24.2/bin/istioctl proxy-config routes deployment/shlink.shlink
+```
+
+#### Analyze Traffic
+
+```bash
+./istio-1.24.2/bin/istioctl analyze -n shlink
+```
+
+### Troubleshooting
+
+#### Pods Not Getting Sidecars
+
+**Check namespace label**:
+```bash
+kubectl get namespace shlink --show-labels | grep istio-injection
+```
+
+**Re-label if needed**:
+```bash
+kubectl label namespace shlink istio-injection=enabled --overwrite
+kubectl rollout restart deployment/shlink -n shlink
+```
+
+#### Gateway Not Routing Traffic
+
+**Check Gateway status**:
+```bash
+kubectl describe gateway shlink-gateway -n shlink
+```
+
+**Check VirtualService binding**:
+```bash
+kubectl describe virtualservice shlink-virtualservice -n shlink
+```
+
+**Verify ingress gateway selector**:
+```bash
+kubectl get deployment -n istio-system istio-ingressgateway \
+  -o jsonpath='{.spec.template.metadata.labels.istio}'
+```
+
+Should output: `ingressgateway`
+
+#### 503 Service Unavailable
+
+**Check if backend service exists**:
+```bash
+kubectl get svc -n shlink shlink
+```
+
+**Verify endpoints**:
+```bash
+kubectl get endpoints -n shlink shlink
+```
+
+**Check pod readiness**:
+```bash
+kubectl get pods -n shlink -o wide
+```
+
+All pods should be `2/2 Running` with `READY` status.
+
+#### View Envoy Logs
+
+```bash
+kubectl logs -n shlink deployment/shlink -c istio-proxy --tail=50
+```
+
+### Production Considerations
+
+**1. TLS/HTTPS Configuration**
+
+Update Gateway for HTTPS:
+```yaml
+spec:
+  servers:
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: shlink-tls-cert  # Kubernetes secret with cert
+    hosts:
+    - "shlink.example.com"
+```
+
+**2. Custom Domain**
+
+Update VirtualService hosts:
+```yaml
+spec:
+  hosts:
+  - "shlink.example.com"
+```
+
+**3. Rate Limiting**
+
+Consider adding Envoy rate limiting filter for API protection.
+
+**4. Monitoring Integration**
+
+Deploy Istio observability stack:
+- **Kiali**: Service mesh visualization
+- **Jaeger**: Distributed tracing
+- **Prometheus**: Metrics collection
+- **Grafana**: Dashboards
+
+```bash
+kubectl apply -f istio-1.24.2/samples/addons/
+```
+
+**5. Resource Limits**
+
+Each Envoy sidecar adds overhead (~50-100MB memory, 0.1 CPU). Adjust pod resource limits accordingly.
+
+### Key Learnings
+
+1. **Sidecar Injection**: Requires namespace labeling and pod restart
+2. **Gateway Selector**: Must match `istio: ingressgateway` label on ingress gateway pods
+3. **FQDN in Destination**: Use fully qualified service name (e.g., `shlink.shlink.svc.cluster.local`)
+4. **Port Matching**: VirtualService destination port must match Service targetPort
+5. **LoadBalancer IPs**: K3s provides multiple IPs for LoadBalancer services; use the first one
+6. **Envoy Logs**: Check `istio-proxy` container logs for routing issues
+7. **Health Checks**: Existing Kubernetes health probes work with Istio (no changes needed)
+
+### Current Status
+
+- Istio 1.24.2 installed and running
+- Ingress gateway accessible at `192.168.2.242`
+- All 3 Shlink pods running with Envoy sidecars (2/2 containers)
+- Gateway and VirtualService configured and routing traffic
+- Full Shlink functionality verified (health, API, redirects, analytics)
+- mTLS not yet enabled (planned for production)
+- Observability stack not deployed (Kiali, Jaeger, Grafana)
 
 ---
 
