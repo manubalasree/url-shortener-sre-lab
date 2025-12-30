@@ -44,8 +44,6 @@ spec:
             secretKeyRef:
               name: shlink-db-pguser-shlink
               key: password
-        - name: REDIS_SERVERS
-          value: "rfr-shlink-redis.redis.svc.cluster.local:6379"
         - name: GEOLITE_LICENSE_KEY
           value: ""
         resources:
