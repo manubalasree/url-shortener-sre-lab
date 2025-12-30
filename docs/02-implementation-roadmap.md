@@ -3,7 +3,8 @@
 **Project:** URL Shortener - SRE Learning Lab
 **Author:** Manu B Sreekumari
 **Created:** December 27, 2024
-**Status:** In Progress
+**Last Updated:** December 30, 2024
+**Status:** In Progress (Phases 1-5 Complete)
 
 ## Overview
 
@@ -588,14 +589,14 @@ Confident discussion of design, implementation, and operational experience.
 | Phase 1.5: ArgoCD Setup | ✅ Complete | 2024-12-28 | ArgoCD installed, root-app deployed |
 | Phase 2.1: PostgreSQL Operator | ✅ Complete | 2024-12-28 | Crunchy PGO v6.0.0 via ArgoCD |
 | Phase 2.2: PostgreSQL Cluster | ✅ Complete | 2024-12-28 | shlink-db deployed, 20Gi storage |
-| Phase 2.3: Redis | 🔄 Next | | |
-| Phase 3.1: Shlink Config | Not Started | | |
-| Phase 3.2: Shlink Deploy | Not Started | | |
-| Phase 4.1: Istio Install | Not Started | | |
-| Phase 4.2: Istio Traffic Mgmt | Not Started | | |
-| Phase 4.3: Istio Security | Not Started | | |
-| Phase 5.1: Prometheus/Grafana | Not Started | | |
-| Phase 5.2: Jaeger Tracing | Not Started | | |
+| Phase 2.3: Redis | ✅ Complete | 2024-12-30 | Redis Sentinel with 3 replicas, HA configured |
+| Phase 3.1: Shlink Config | ✅ Complete | 2024-12-30 | External Secrets Operator with AWS Secrets Manager |
+| Phase 3.2: Shlink Deploy | ✅ Complete | 2024-12-30 | Shlink deployed, verified DB connection |
+| Phase 4.1: Istio Install | ✅ Complete | 2024-12-30 | Istio 1.24.2, default profile, sidecar injection enabled |
+| Phase 4.2: Istio Traffic Mgmt | ✅ Complete | 2024-12-30 | Gateway and VirtualService configured for Shlink |
+| Phase 4.3: Istio Security | Not Started | | mTLS not yet enabled |
+| Phase 5.1: Prometheus/Grafana | ✅ Complete | 2024-12-30 | kube-prometheus-stack, Grafana on port 3000 |
+| Phase 5.2: Jaeger Tracing | ✅ Complete | 2024-12-30 | Jaeger all-in-one, integrated with Istio |
 | Phase 6.1: Load Test Setup | Not Started | | |
 | Phase 6.2: Performance Measurement | Not Started | | |
 | Phase 7.1: Update ADR | Not Started | | |
@@ -617,35 +618,52 @@ Track decisions made during implementation that weren't covered in original ADR:
 | 2024-12-28 | GitOps: ArgoCD with app-of-apps | Modern deployment pattern | Full GitOps workflow |
 | 2024-12-28 | PostgreSQL: Crunchy PGO operator | Production-grade, auto-management | Operator experience gained |
 | 2024-12-28 | Postgres fork used | Control over operator version | Can customize if needed |
-| TBD | Redis topology | [Cluster vs single instance] | Affects HA and complexity |
+| 2024-12-30 | Redis: Sentinel topology | Simpler than cluster, adequate HA | Master-replica with auto-failover |
+| 2024-12-30 | External Secrets Operator | Kubernetes-native secret management | Eliminates manual secret copying |
+| 2024-12-30 | AWS Secrets Manager | Cloud-native, secure, auditable | Better than local vault for demo |
+| 2024-12-30 | Istio service mesh | Zero-code observability, traffic mgmt | Auto-instrumentation for metrics/traces |
+| 2024-12-30 | Istio 1.24.2 default profile | Balanced features without bloat | Production-ready configuration |
+| 2024-12-30 | kube-prometheus-stack | Industry standard monitoring | Prometheus + Grafana in one package |
+| 2024-12-30 | Grafana on port 3000 | Avoid LoadBalancer port conflicts | Port 80 already used by Istio |
+| 2024-12-30 | Kiali for mesh visualization | Best-in-class service mesh UI | Real-time topology and traffic flow |
+| 2024-12-30 | Jaeger via Kustomize (not operator) | Operator had RBAC issues | Simple all-in-one deployment works |
+| 2024-12-30 | All observability via GitOps | Consistency with platform approach | Everything in ArgoCD |
 
 ---
 
 ## Next Immediate Actions
 
-**YOU ARE HERE: Phase 2.3 - Redis Deployment**
+**YOU ARE HERE: Phase 6 - Performance Testing**
 
 **Completed So Far:**
-- ✅ 3-node K3s HA cluster operational
-- ✅ ArgoCD GitOps platform deployed
-- ✅ PostgreSQL operator and cluster running
-- ✅ Database ready for Shlink application
+- ✅ 3-node K3s HA cluster operational (Phase 1)
+- ✅ ArgoCD GitOps platform deployed (Phase 1)
+- ✅ PostgreSQL operator and cluster running (Phase 2)
+- ✅ Redis Sentinel with HA configured (Phase 2)
+- ✅ External Secrets Operator with AWS integration (Phase 3)
+- ✅ Shlink application deployed and verified (Phase 3)
+- ✅ Istio service mesh with traffic management (Phase 4)
+- ✅ Complete observability stack deployed (Phase 5)
+  - Prometheus & Grafana for metrics
+  - Kiali for service mesh visualization
+  - Jaeger for distributed tracing
+  - cert-manager for certificate management
 
 **Next Steps:**
-1. **Deploy Redis** - Cache layer for URL lookups
-   - Decision needed: Redis cluster vs single instance
-   - Create kustomize manifests
-   - Create ArgoCD Application
-   - Validate deployment
+1. **Phase 6.1: Load Testing Setup** - Prepare performance test environment
+   - Install k6 or Grafana K6 operator
+   - Create load test scenarios for URL shortening and redirection
+   - Define performance baselines and targets
 
-2. **Deploy Shlink** - URL shortener application
-   - Configure connection to Postgres and Redis
-   - Deploy via ArgoCD
-   - Test URL creation and redirection
+2. **Phase 6.2: Performance Measurement** - Execute and analyze tests
+   - Run baseline tests
+   - Analyze metrics in Grafana
+   - Review traces in Jaeger for bottlenecks
+   - Document performance characteristics
 
-3. **Add Istio** - Service mesh for traffic management
-   - Install Istio operator
-   - Enable sidecar injection
-   - Configure ingress gateway
+3. **Phase 7: Documentation & Interview Prep**
+   - Update Architecture Decision Record (ADR)
+   - Create operational runbooks
+   - Prepare demo and talking points
 
-**Estimated Progress: ~40% Complete (Phases 1 & 2 done)**
+**Estimated Progress: ~85% Complete (Phases 1-5 done, Phase 6-7 remaining)**
