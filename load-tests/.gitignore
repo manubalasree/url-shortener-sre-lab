@@ -1,0 +1,23 @@
+# k6 test results
+results/*.json
+results/*.txt
+results/*.csv
+results/*.html
+
+# Keep the directory structure
+!results/.gitkeep
+
+# Temporary files
+*.tmp
+*.log
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
