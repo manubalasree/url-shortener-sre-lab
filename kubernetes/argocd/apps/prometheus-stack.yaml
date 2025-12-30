@@ -28,6 +28,7 @@ spec:
           adminPassword: admin
           service:
             type: LoadBalancer
+            port: 3000
           persistence:
             enabled: true
             size: 5Gi
