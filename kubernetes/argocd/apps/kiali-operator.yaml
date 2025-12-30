@@ -24,11 +24,11 @@ spec:
               service_type: LoadBalancer
             external_services:
               prometheus:
-                url: http://kube-prometheus-stack-prometheus.observability:9090
+                url: http://prometheus-stack-kube-prom-prometheus.observability:9090
               grafana:
                 enabled: true
-                in_cluster_url: http://kube-prometheus-stack-grafana.observability:80
-                url: http://kube-prometheus-stack-grafana.observability:80
+                in_cluster_url: http://prometheus-stack-grafana.observability:80
+                url: http://prometheus-stack-grafana.observability:80
               tracing:
                 enabled: true
                 in_cluster_url: http://jaeger-query.observability:16686
