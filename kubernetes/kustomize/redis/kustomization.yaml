@@ -4,3 +4,4 @@ namespace: redis
 
 resources:
 - redis-cluster.yaml
+- redis-headless-svc.yaml
