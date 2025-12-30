@@ -1,0 +1,19 @@
+# Jaeger Operator Helm values
+jaeger:
+  create: true
+  spec:
+    strategy: allInOne
+    allInOne:
+      image: jaegertracing/all-in-one:latest
+      options:
+        log-level: info
+    storage:
+      type: memory
+      options:
+        memory:
+          max-traces: 100000
+    ingress:
+      enabled: false
+    query:
+      service:
+        type: LoadBalancer

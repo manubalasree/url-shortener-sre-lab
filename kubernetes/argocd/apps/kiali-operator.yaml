@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kiali-operator
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: kiali-operator
+    repoURL: https://kiali.org/helm-charts
+    targetRevision: 2.4.0
+    helm:
+      valuesObject:
+        cr:
+          create: true
+          name: kiali
+          namespace: observability
+          spec:
+            auth:
+              strategy: anonymous
+            deployment:
+              accessible_namespaces:
+              - '**'
+              service_type: LoadBalancer
+            external_services:
+              prometheus:
+                url: http://kube-prometheus-stack-prometheus.observability:9090
+              grafana:
+                enabled: true
+                in_cluster_url: http://kube-prometheus-stack-grafana.observability:80
+                url: http://kube-prometheus-stack-grafana.observability:80
+              tracing:
+                enabled: true
+                in_cluster_url: http://jaeger-query.observability:16686
+                url: http://jaeger-query.observability:16686
+                use_grpc: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
