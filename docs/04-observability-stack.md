@@ -1327,6 +1327,87 @@ meshConfig:
 
 This documentation is the result!
 
+### 9. ArgoCD CRD Size Limitations
+
+**Issue Encountered**:
+- Prometheus Operator CRDs failed to install via ArgoCD
+- Error: `metadata.annotations: Too long: may not be more than 262144 bytes`
+- ArgoCD's client-side apply has a 262KB annotation limit
+- Prometheus Operator v0.79+ has extremely large CRD schemas with extensive validation rules
+
+**Impact**:
+- Without CRDs, Prometheus CR couldn't be created
+- No Prometheus StatefulSet was deployed
+- Entire metrics collection pipeline was broken
+
+**Solution**:
+```bash
+# Apply CRDs directly with server-side apply
+kubectl apply --server-side -f <prometheus-operator-crds-url>
+```
+
+**Why This Works**:
+- Server-side apply bypasses ArgoCD's annotation processing
+- Kubernetes API server handles the large CRDs natively
+- ArgoCD can then manage the Prometheus CR (which references the CRD)
+
+**Learning**: For operators with large CRDs (Prometheus, Cert-Manager, etc.), consider:
+1. Pre-install CRDs with `kubectl apply --server-side`
+2. Use ArgoCD's `Replace=true` sync option
+3. Or manage CRDs separately from the operator deployment
+
+### 10. Helm Chart Naming Inconsistencies
+
+**Issue Encountered**:
+- Kiali couldn't connect to Prometheus or Grafana
+- DNS lookup failures for services
+
+**Root Cause**:
+The `kube-prometheus-stack` Helm chart creates services with **inconsistent naming patterns**:
+- Chart name suggests: `kube-prometheus-stack-*`
+- Actual service names: `prometheus-stack-kube-prom-*`
+
+**Examples**:
+| Expected (by convention) | Actual Service Name |
+|-------------------------|---------------------|
+| `kube-prometheus-stack-prometheus` | `prometheus-stack-kube-prom-prometheus` |
+| `kube-prometheus-stack-grafana` | `prometheus-stack-grafana` |
+| `kube-prometheus-stack-alertmanager` | `prometheus-stack-kube-prom-alertmanager` |
+
+**Wrong Port Assumption**:
+- Kiali config had Grafana on port 80
+- Actual Grafana service port is 3000
+- Error: `connect: network is unreachable`
+
+**Solution**:
+```yaml
+# Correct Kiali external services configuration
+external_services:
+  prometheus:
+    url: http://prometheus-stack-kube-prom-prometheus.observability:9090
+  grafana:
+    url: http://prometheus-stack-grafana.observability:3000  # Not port 80!
+```
+
+**Learning**:
+1. **Never assume service names** from chart names - always verify with `kubectl get svc`
+2. **Check actual ports** - don't rely on defaults or documentation
+3. **Test connectivity** from the consuming pod before declaring success
+4. **Document actual service names** in your integration configs
+
+**Debugging Commands**:
+```bash
+# Find actual service names
+kubectl get svc -n observability | grep prometheus
+kubectl get svc -n observability | grep grafana
+
+# Test connectivity from Kiali pod
+kubectl exec -n observability deployment/kiali -- wget -O- http://prometheus-stack-kube-prom-prometheus.observability:9090/api/v1/status/buildinfo
+
+# Check Kiali logs for integration errors
+kubectl logs -n observability -l app=kiali | grep -i "error\|failed"
+```
+
 ---
 
 ## Summary
