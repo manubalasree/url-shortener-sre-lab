@@ -3,8 +3,11 @@ kind: Application
 metadata:
   name: cert-manager
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
+
   source:
     chart: cert-manager
     repoURL: https://charts.jetstack.io
@@ -14,15 +17,17 @@ spec:
         crds:
           enabled: true
           keep: true
+
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-    - CreateNamespace=true
+      - CreateNamespace=true
     retry:
       limit: 5
       backoff:

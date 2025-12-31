@@ -1,19 +1,23 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: postgres-operator
+  name: redis-operator
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/notes: "Redis deployed but NOT integrated with Shlink due to Predis compatibility issues. Infrastructure ready for future use."
 spec:
   project: default
 
   source:
-    repoURL: https://github.com/manubalasree/postgres-operator
-    targetRevision: main
-    path: config/default
+    repoURL: https://spotahome.github.io/redis-operator
+    chart: redis-operator
+    targetRevision: 3.2.9
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: postgres-operator
+    namespace: redis-operator
 
   syncPolicy:
     automated:
@@ -23,7 +27,7 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
     retry:
-      limit: 7
+      limit: 5
       backoff:
         duration: 5s
         factor: 2

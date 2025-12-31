@@ -1,19 +1,21 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: postgres-cluster
+  name: shlink
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
 
   source:
     repoURL: https://github.com/manubalasree/url-shortener-sre-lab
     targetRevision: main
-    path: kubernetes/kustomize/postgres
+    path: kubernetes/kustomize/shlink
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: postgres
+    namespace: shlink
 
   syncPolicy:
     automated:
@@ -22,15 +24,8 @@ spec:
     syncOptions:
       - CreateNamespace=true
     retry:
-      limit: 7
+      limit: 5
       backoff:
         duration: 5s
         factor: 2
         maxDuration: 3m
-
-  # Wait for operator to be ready before deploying cluster
-  ignoreDifferences:
-  - group: postgres-operator.crunchydata.com
-    kind: PostgresCluster
-    jqPathExpressions:
-    - .status

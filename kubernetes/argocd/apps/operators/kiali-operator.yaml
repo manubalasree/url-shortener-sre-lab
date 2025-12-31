@@ -3,8 +3,11 @@ kind: Application
 metadata:
   name: kiali-operator
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
+
   source:
     chart: kiali-operator
     repoURL: https://kiali.org/helm-charts
@@ -34,15 +37,17 @@ spec:
                 in_cluster_url: http://jaeger-query.observability:16686
                 url: http://jaeger-query.observability:16686
                 use_grpc: false
+
   destination:
     server: https://kubernetes.default.svc
     namespace: observability
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-    - CreateNamespace=true
+      - CreateNamespace=true
     retry:
       limit: 5
       backoff:

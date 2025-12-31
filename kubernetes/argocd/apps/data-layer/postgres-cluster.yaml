@@ -1,26 +1,38 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: jaeger
+  name: postgres-cluster
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
+
   source:
     repoURL: https://github.com/manubalasree/url-shortener-sre-lab
     targetRevision: main
-    path: kubernetes/kustomize/jaeger
+    path: kubernetes/kustomize/postgres
+
   destination:
     server: https://kubernetes.default.svc
-    namespace: observability
+    namespace: postgres
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-    - CreateNamespace=true
+      - CreateNamespace=true
     retry:
       limit: 5
       backoff:
         duration: 5s
         factor: 2
         maxDuration: 3m
+
+  # Ignore status changes - operator manages this
+  ignoreDifferences:
+    - group: postgres-operator.crunchydata.com
+      kind: PostgresCluster
+      jqPathExpressions:
+        - .status

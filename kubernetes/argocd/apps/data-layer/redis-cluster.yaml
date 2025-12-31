@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: redis-cluster
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/notes: "Redis deployed but NOT integrated with Shlink due to Predis compatibility issues. Infrastructure ready for future use."
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/manubalasree/url-shortener-sre-lab
+    targetRevision: main
+    path: kubernetes/kustomize/redis
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: redis
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Ignore status changes - operator manages this
+  ignoreDifferences:
+    - group: databases.spotahome.com
+      kind: RedisFailover
+      jqPathExpressions:
+        - .status

@@ -1,20 +1,31 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: shlink
+  name: jaeger
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
+
   source:
     repoURL: https://github.com/manubalasree/url-shortener-sre-lab
     targetRevision: main
-    path: kubernetes/kustomize/shlink
+    path: kubernetes/kustomize/jaeger
+
   destination:
     server: https://kubernetes.default.svc
-    namespace: shlink
+    namespace: observability
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

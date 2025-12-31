@@ -1,0 +1,109 @@
+# ArgoCD Application Template
+#
+# Use this template as a starting point for new applications.
+# Copy this file and fill in the values marked with CHANGEME.
+#
+# Example:
+#   cp _template.yaml my-new-app.yaml
+#   # Edit my-new-app.yaml with your values
+#   kubectl apply -f my-new-app.yaml
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: CHANGEME-app-name
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  # Optional: Add annotations for documentation
+  # annotations:
+  #   argocd.argoproj.io/notes: "Description of what this app does"
+spec:
+  project: default
+
+  source:
+    # For Helm charts:
+    # repoURL: https://charts.example.com
+    # chart: chart-name
+    # targetRevision: 1.2.3  # Use semantic version, not 'latest'
+
+    # For Git repositories:
+    repoURL: https://github.com/manubalasree/url-shortener-sre-lab
+    targetRevision: main
+    path: kubernetes/kustomize/CHANGEME-directory
+
+    # Optional: For Helm charts, add values
+    # helm:
+    #   releaseName: my-release
+    #   valuesObject:
+    #     key: value
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: CHANGEME-namespace
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Optional: Add ServerSideApply for operators/CRDs
+      # - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Optional: Ignore status changes for operator-managed resources
+  # ignoreDifferences:
+  #   - group: example.com
+  #     kind: CustomResource
+  #     jqPathExpressions:
+  #       - .status
+
+---
+# Quick Reference:
+#
+# Common Source Types:
+#
+# 1. Helm Chart from Repository:
+#    source:
+#      repoURL: https://charts.jetstack.io
+#      chart: cert-manager
+#      targetRevision: v1.16.2
+#      helm:
+#        valuesObject:
+#          key: value
+#
+# 2. Kustomize from Git:
+#    source:
+#      repoURL: https://github.com/user/repo
+#      targetRevision: main
+#      path: path/to/kustomize
+#
+# 3. Raw YAML from Git:
+#    source:
+#      repoURL: https://github.com/user/repo
+#      targetRevision: main
+#      path: path/to/manifests
+#      directory:
+#        recurse: true
+#
+# Common SyncOptions:
+#  - CreateNamespace=true     # Auto-create target namespace
+#  - ServerSideApply=true     # Use server-side apply (for CRDs)
+#  - PruneLast=true           # Prune resources last during sync
+#  - RespectIgnoreDifferences=true  # Respect ignoreDifferences
+#
+# Dependency Management:
+#  Use sync waves if order matters:
+#  metadata:
+#    annotations:
+#      argocd.argoproj.io/sync-wave: "1"  # Lower number = earlier
+#
+# Health Checks:
+#  ArgoCD auto-detects health for common resources.
+#  Custom health checks can be defined in argocd-cm ConfigMap.
