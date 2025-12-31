@@ -5,7 +5,19 @@ metadata:
   namespace: istio-system
 data:
   mesh: |
-    # Extension providers for telemetry
+    defaultConfig:
+      discoveryAddress: istiod.istio-system.svc:15012
+      tracing:
+        sampling: 100.0
+        max_path_tag_length: 256
+        zipkin:
+          address: jaeger-collector.observability.svc.cluster.local:9411
+    defaultProviders:
+      metrics:
+      - prometheus
+    enablePrometheusMerge: true
+    rootNamespace: istio-system
+    trustDomain: cluster.local
     extensionProviders:
     - name: jaeger
       zipkin:
@@ -15,31 +27,3 @@ data:
     - name: envoy
       envoyFileAccessLog:
         path: /dev/stdout
-        logFormat:
-          labels:
-            start_time: "%START_TIME%"
-            method: "%REQ(:METHOD)%"
-            path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
-            protocol: "%PROTOCOL%"
-            response_code: "%RESPONSE_CODE%"
-            response_flags: "%RESPONSE_FLAGS%"
-            bytes_received: "%BYTES_RECEIVED%"
-            bytes_sent: "%BYTES_SENT%"
-            duration: "%DURATION%"
-            upstream_service_time: "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%"
-            x_forwarded_for: "%REQ(X-FORWARDED-FOR)%"
-            user_agent: "%REQ(USER-AGENT)%"
-            request_id: "%REQ(X-REQUEST-ID)%"
-            authority: "%REQ(:AUTHORITY)%"
-            upstream_host: "%UPSTREAM_HOST%"
-
-    # Enable tracing globally
-    enableTracing: true
-
-    # Default tracing configuration
-    defaultConfig:
-      tracing:
-        sampling: 100.0
-        max_path_tag_length: 256
-        zipkin:
-          address: jaeger-collector.observability.svc.cluster.local:9411

@@ -5,11 +5,7 @@ namespace: istio-system
 
 resources:
   - telemetry.yaml
-
-# Note: The configmap.yaml is commented out because it may conflict
-# with existing Istio installation. If needed, apply manually or
-# patch the existing istio configmap instead.
-# - configmap.yaml
+  - configmap.yaml
 
 commonLabels:
   app.kubernetes.io/component: telemetry
