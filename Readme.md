@@ -18,7 +18,7 @@ This project implements a highly available URL shortener service (Shlink) on a K
 - **Service Mesh**: Istio v1.24.2 providing zero-code observability and traffic management
 - **GitOps**: ArgoCD managing all deployments with automated sync and pruning
 - **High Availability**: Replicated application pods, PostgreSQL HA cluster, Redis Sentinel
-- **Load Balancing**: MetalLB providing LoadBalancer services on bare metal
+- **Load Balancing**: K3s ServiceLB (klipper-lb) providing built-in LoadBalancer services
 
 ### Application Stack
 
@@ -506,7 +506,7 @@ argocd app sync <app-name>
 - Kubernetes: K3s v1.31.4+k3s1
 - Service Mesh: Istio v1.24.2
 - GitOps: ArgoCD v2.13.3
-- Load Balancer: MetalLB
+- Load Balancer: K3s ServiceLB (klipper-lb)
 - Storage: local-path provisioner
 
 **Application**:

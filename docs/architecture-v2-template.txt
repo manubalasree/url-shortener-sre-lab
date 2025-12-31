@@ -1,0 +1,398 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                    URL Shortener SRE Lab - Production Architecture             ║
+║                              Architecture v2 (Phase 6 Complete)                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                          GITOPS AUTOMATION LAYER                               │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│   ┌────────────────────────────────────────────────────────────────────────┐  │
+│   │                        ArgoCD v2.13.3                                  │  │
+│   │  • 13 Applications managed                                             │  │
+│   │  • Auto-sync enabled with self-heal                                    │  │
+│   │  • GitOps-driven infrastructure as code                                │  │
+│   │  • Prune: true (removes manual resources)                              │  │
+│   │  • Repository: github.com/manubalasree/url-shortener-sre-lab          │  │
+│   └────────────────────────────┬───────────────────────────────────────────┘  │
+│                                │                                              │
+│                                ↓ manages                                      │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                         KUBERNETES INFRASTRUCTURE                              │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│   ┌────────────────────────────────────────────────────────────────────────┐  │
+│   │                    K3s v1.31.4 HA Cluster                              │  │
+│   │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐               │  │
+│   │  │   Node 1     │   │   Node 2     │   │   Node 3     │               │  │
+│   │  │ 192.168.2.242│   │ 192.168.2.243│   │ 192.168.2.244│               │  │
+│   │  │ CP + Worker  │   │ CP + Worker  │   │ CP + Worker  │               │  │
+│   │  └──────────────┘   └──────────────┘   └──────────────┘               │  │
+│   │  • Embedded etcd (HA control plane)                                    │  │
+│   │  • Flannel CNI networking                                              │  │
+│   │  • local-path storage provisioner                                      │  │
+│   └────────────────────────────┬───────────────────────────────────────────┘  │
+│                                │                                              │
+│   ┌────────────────────────────▼───────────────────────────────────────────┐  │
+│   │              K3s ServiceLB (klipper-lb)                                │  │
+│   │  Built-in LoadBalancer implementation                                  │  │
+│   │  Provides LoadBalancer services using node IPs: 192.168.2.242-244      │  │
+│   └────────────────────────────┬───────────────────────────────────────────┘  │
+│                                │                                              │
+│                                ↓ exposes                                      │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                         SERVICE MESH LAYER (Istio v1.24.2)                     │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│   ┌────────────────────────────────────────────────────────────────────────┐  │
+│   │                    Istio Ingress Gateway                               │  │
+│   │  • LoadBalancer: 192.168.2.242:80                                      │  │
+│   │  • Entry point for all external traffic                                │  │
+│   │  • Envoy proxy with rate limiting                                      │  │
+│   │  • TLS termination ready                                               │  │
+│   └────────────────────────────┬───────────────────────────────────────────┘  │
+│                                │                                              │
+│                                ↓ routes to                                    │
+│                                                                                │
+│   ┌────────────────────────────────────────────────────────────────────────┐  │
+│   │                 Istio Control Plane (Istiod)                           │  │
+│   │  • Service discovery and configuration                                 │  │
+│   │  • Certificate management (mTLS ready)                                 │  │
+│   │  • Sidecar injection (automatic in shlink namespace)                   │  │
+│   │  • Telemetry configuration (100% sampling)                             │  │
+│   └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                │
+│   Key Features:                                                                │
+│   ✓ Zero-code observability (automatic metrics, traces, logs)                 │
+│   ✓ Envoy sidecars auto-injected into application pods                        │
+│   ✓ ServiceMonitors scraping Istio metrics for Prometheus                     │
+│   ✓ Jaeger integration via extensionProviders                                 │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                            APPLICATION WORKFLOWS                               │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │                         WRITE WORKFLOW (URL Creation)                    │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                │
+│     Client                                                                     │
+│       │                                                                        │
+│       ↓                                                                        │
+│  ┌─────────────────┐                                                           │
+│  │ Istio Ingress   │  Rate limiting, trace header injection                   │
+│  │ Gateway :80     │                                                           │
+│  └────────┬────────┘                                                           │
+│           │                                                                    │
+│           ↓                                                                    │
+│  ┌────────────────────────────────────────────────────────────────────────┐   │
+│  │              Shlink Application (3 replicas)                           │   │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐        │   │
+│  │  │  Shlink Pod 1   │  │  Shlink Pod 2   │  │  Shlink Pod 3   │        │   │
+│  │  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────┐ │        │   │
+│  │  │ │   Envoy     │ │  │ │   Envoy     │ │  │ │   Envoy     │ │        │   │
+│  │  │ │  Sidecar    │ │  │ │  Sidecar    │ │  │ │  Sidecar    │ │        │   │
+│  │  │ │ :15020      │ │  │ │ :15020      │ │  │ │ :15020      │ │        │   │
+│  │  │ └──────┬──────┘ │  │ └──────┬──────┘ │  │ └──────┬──────┘ │        │   │
+│  │  │        │        │  │        │        │  │        │        │        │   │
+│  │  │ ┌──────▼──────┐ │  │ ┌──────▼──────┐ │  │ ┌──────▼──────┐ │        │   │
+│  │  │ │ Shlink App  │ │  │ │ Shlink App  │ │  │ │ Shlink App  │ │        │   │
+│  │  │ │  v4.x :8080 │ │  │ │  v4.x :8080 │ │  │ │  v4.x :8080 │ │        │   │
+│  │  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────┘ │        │   │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘        │   │
+│  │  Service: shlink.shlink.svc.cluster.local:8080                         │   │
+│  └────────────────────────────┬───────────────────────────────────────────┘   │
+│                               │                                               │
+│                               ↓ writes to                                     │
+│           ┌───────────────────┴───────────────────┐                           │
+│           │                                       │                           │
+│           ↓                                       ↓                           │
+│  ┌──────────────────┐                   ┌──────────────────────┐             │
+│  │ Redis Sentinel   │                   │ PostgreSQL HA Cluster│             │
+│  │ (NOT connected)  │                   │                      │             │
+│  │ • 3 Redis pods   │                   │ ┌──────────────────┐ │             │
+│  │ • 3 Sentinel pods│                   │ │  Primary (RW)    │ │             │
+│  │ • 8Gi per replica│                   │ │  20Gi PVC        │ │             │
+│  │ • Predis issue   │                   │ └────────┬─────────┘ │             │
+│  │   (disabled)     │                   │          │           │             │
+│  └──────────────────┘                   │ ┌────────▼─────────┐ │             │
+│                                         │ │  Replica 1 (RO)  │ │             │
+│                                         │ │  20Gi PVC        │ │             │
+│                                         │ └──────────────────┘ │             │
+│                                         │ ┌──────────────────┐ │             │
+│                                         │ │  Replica 2 (RO)  │ │             │
+│                                         │ │  20Gi PVC        │ │             │
+│                                         │ └──────────────────┘ │             │
+│                                         │ Crunchy Data Operator│             │
+│                                         └──────────────────────┘             │
+│                                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │                         READ WORKFLOW (URL Redirect)                     │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                │
+│     Client                                                                     │
+│       │                                                                        │
+│       ↓                                                                        │
+│  ┌─────────────────┐                                                           │
+│  │ Istio Ingress   │  Trace header injection, metrics collection              │
+│  │ Gateway :80     │                                                           │
+│  └────────┬────────┘                                                           │
+│           │                                                                    │
+│           ↓                                                                    │
+│  ┌──────────────────┐                                                          │
+│  │ Shlink Pod       │                                                          │
+│  │ (load balanced)  │                                                          │
+│  └────────┬─────────┘                                                          │
+│           │                                                                    │
+│           ↓ check cache first                                                 │
+│  ┌──────────────────┐        CACHE MISS                                        │
+│  │ Redis (disabled) │ ─────────────────────────┐                              │
+│  └──────────────────┘                          │                              │
+│                                                │                              │
+│                                                ↓ read from DB                  │
+│                                      ┌──────────────────────┐                 │
+│                                      │ PostgreSQL           │                 │
+│                                      │ (Primary or Replica) │                 │
+│                                      │ P50: ~40ms           │                 │
+│                                      └──────────────────────┘                 │
+│                                                                                │
+│  Performance (from Scenario 1 baseline):                                      │
+│  • URL Creation: 39ms median, 100% success                                    │
+│  • Redirects: 28ms median, 100% success                                       │
+│  • Grafana P50: ~20ms, P90: ~30-40ms, P99: ~40-50ms                           │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                        OBSERVABILITY STACK (Complete)                          │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│   Data Flow: Envoy Sidecars → ServiceMonitors → Prometheus → Grafana/Kiali    │
+│              Envoy Sidecars → Jaeger Collector → Jaeger UI                     │
+│                                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │                       Prometheus + Operator                              │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐     │ │
+│  │  │ Prometheus Server (StatefulSet)                                 │     │ │
+│  │  │ • Port: 9090                                                    │     │ │
+│  │  │ • PVC: 5Gi (metrics storage, 10-day retention)                  │     │ │
+│  │  │ • Scrapes via ServiceMonitors/PodMonitors:                      │     │ │
+│  │  │   - servicemonitor-istiod (control plane)                       │     │ │
+│  │  │   - servicemonitor-ingressgateway (gateway)                     │     │ │
+│  │  │   - podmonitor-envoy-stats (all Envoy sidecars)                 │     │ │
+│  │  │   - kube-state-metrics, node-exporter                           │     │ │
+│  │  │ • Label selector: release=prometheus-stack                      │     │ │
+│  │  └─────────────────────────────────────────────────────────────────┘     │ │
+│  │  Service: prometheus-stack-kube-prom-prometheus.observability:9090       │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │                              Grafana                                     │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐     │ │
+│  │  │ Grafana Server (Deployment)                                     │     │ │
+│  │  │ • Port: 3000 (LoadBalancer: 192.168.2.242:3000)                 │     │ │
+│  │  │ • PVC: 5Gi (dashboard storage)                                  │     │ │
+│  │  │ • Credentials: admin/admin                                      │     │ │
+│  │  │ • Data source: Prometheus                                       │     │ │
+│  │  │ • Dashboards:                                                   │     │ │
+│  │  │   - Istio Service Dashboard (P50/P95/P99 latencies)             │     │ │
+│  │  │   - Istio Control Plane Dashboard                               │     │ │
+│  │  │   - Istio Mesh Dashboard                                        │     │ │
+│  │  │   - Kubernetes Cluster Monitoring                               │     │ │
+│  │  └─────────────────────────────────────────────────────────────────┘     │ │
+│  │  Service: prometheus-stack-grafana.observability:3000                    │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │                         Jaeger (All-in-One)                              │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐     │ │
+│  │  │ Jaeger Deployment (v1.53)                                       │     │ │
+│  │  │ • jaeger-query: 16686 (UI, LoadBalancer: 192.168.2.242:16686)   │     │ │
+│  │  │ • jaeger-collector: 4317 (OTLP from Istio sidecars)             │     │ │
+│  │  │ • Storage: In-memory (ephemeral)                                │     │ │
+│  │  │ • Sampling: 100% (configured via Istio Telemetry)               │     │ │
+│  │  │ • Custom tags: environment=k3s-lab, cluster=url-shortener       │     │ │
+│  │  └─────────────────────────────────────────────────────────────────┘     │ │
+│  │  Service: jaeger-collector.observability:4317 (Istio sends here)         │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────────┐ │
+│  │                    Kiali (Service Mesh Visualization)                    │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐     │ │
+│  │  │ Kiali Server (Deployment)                                       │     │ │
+│  │  │ • Port: 20001 (LoadBalancer: 192.168.2.242:20001)               │     │ │
+│  │  │ • Auth: Anonymous (homelab)                                     │     │ │
+│  │  │ • Integrations:                                                 │     │ │
+│  │  │   - Prometheus: prometheus-stack-kube-prom-prometheus:9090      │     │ │
+│  │  │   - Grafana: prometheus-stack-grafana:3000                      │     │ │
+│  │  │   - Jaeger: jaeger-query:16686                                  │     │ │
+│  │  │ • Features:                                                     │     │ │
+│  │  │   - Real-time service graph topology                            │     │ │
+│  │  │   - Traffic flow visualization                                  │     │ │
+│  │  │   - Health indicators and success rates                         │     │ │
+│  │  │   - Click-through to traces and dashboards                      │     │ │
+│  │  └─────────────────────────────────────────────────────────────────┘     │ │
+│  │  Service: kiali.observability:20001                                      │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                           OPERATORS & PLATFORM SERVICES                        │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐    │
+│  │ Postgres Operator│  │  Redis Operator  │  │ External Secrets Operator│    │
+│  │                  │  │                  │  │                          │    │
+│  │ Crunchy Data v6  │  │  Spotahome       │  │ Syncs from AWS Secrets   │    │
+│  │ Manages:         │  │  RedisFailover   │  │ Manager                  │    │
+│  │ • PostgreSQL HA  │  │  CRD             │  │ • Kubernetes auth to AWS │    │
+│  │ • Backups        │  │ • Sentinel mode  │  │ • Auto-refresh: 1 hour   │    │
+│  │ • Replication    │  │ • Auto-failover  │  │ • Target: shlink ns      │    │
+│  └──────────────────┘  └──────────────────┘  └──────────────────────────┘    │
+│                                                                                │
+│  ┌──────────────────┐  ┌──────────────────┐                                  │
+│  │ Kiali Operator   │  │  cert-manager    │                                  │
+│  │                  │  │                  │                                  │
+│  │ Manages Kiali CR │  │ TLS cert mgmt    │                                  │
+│  │ Service mesh viz │  │ Webhook certs    │                                  │
+│  │ Config updates   │  │ Required by ops  │                                  │
+│  └──────────────────┘  └──────────────────┘                                  │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                          LOAD TESTING INFRASTRUCTURE                           │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│   k6 Load Testing (External to cluster)                                       │
+│                                                                                │
+│   ┌────────────────────────────────────────────────────────────────────────┐  │
+│   │                     Three Progressive Scenarios                        │  │
+│   │                                                                        │  │
+│   │  Scenario 1: Baseline (normal day)                                    │  │
+│   │  • 1 URL creation/sec, 20 redirects/sec                               │  │
+│   │  • Duration: 10 minutes                                               │  │
+│   │  • Results: 100% success, P50 ~20ms                                   │  │
+│   │                                                                        │  │
+│   │  Scenario 2: Peak Hours                                               │  │
+│   │  • 2 creations/sec, 50 redirects/sec                                  │  │
+│   │  • Duration: 5 minutes                                                │  │
+│   │                                                                        │  │
+│   │  Scenario 3: Viral Event                                              │  │
+│   │  • 5-8 creations/sec, 100-200+ redirects/sec                          │  │
+│   │  • Duration: 10 minutes                                               │  │
+│   │  • Pareto distribution (80/20 traffic concentration)                  │  │
+│   └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                │
+│   Monitoring During Tests:                                                    │
+│   → Grafana: Real-time P50/P95/P99 latencies                                  │
+│   → Kiali: Service graph traffic flow                                         │
+│   → Jaeger: Individual trace samples                                          │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                              ACCESS SUMMARY                                    │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│   External Access (via MetalLB LoadBalancer):                                 │
+│                                                                                │
+│   • Shlink:    http://192.168.2.242:80        (URL shortener service)         │
+│   • ArgoCD:    http://192.168.2.242:30080     (GitOps UI)                     │
+│   • Grafana:   http://192.168.2.242:3000      (Metrics dashboards)            │
+│   • Kiali:     http://192.168.2.242:20001     (Service mesh graph)            │
+│   • Jaeger:    http://192.168.2.242:16686     (Distributed traces)            │
+│                                                                                │
+│   Internal Services (ClusterIP):                                              │
+│                                                                                │
+│   • Prometheus: prometheus-stack-kube-prom-prometheus.observability:9090      │
+│   • PostgreSQL: shlink-db-primary.postgres.svc.cluster.local:5432             │
+│   • Redis:      rfs-shlink-redis.redis.svc.cluster.local:26379 (disabled)     │
+│   • Istiod:     istiod.istio-system.svc.cluster.local:15012                   │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                           DEPLOYMENT STATISTICS                                │
+├────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                │
+│   Namespaces: 12 total                                                        │
+│   • argocd, cert-manager, external-secrets, istio-system, kiali-operator      │
+│   • observability, postgres, postgres-operator, redis, redis-operator         │
+│   • shlink, vault (legacy)                                                    │
+│                                                                                │
+│   Workloads:                                                                  │
+│   • Deployments: 15+ (ArgoCD, Istio, operators, observability tools)          │
+│   • StatefulSets: 7 (Prometheus, PostgreSQL ×3, Redis ×3, ArgoCD controller)  │
+│   • DaemonSets: 3 (flannel, node-exporter, kube-proxy)                        │
+│                                                                                │
+│   Storage:                                                                    │
+│   • Persistent Volumes: 14 total                                              │
+│   • Total Storage: ~95Gi allocated                                            │
+│     - Prometheus: 5Gi, Grafana: 5Gi                                           │
+│     - PostgreSQL: 60Gi (20Gi × 3 instances)                                   │
+│     - Redis: 24Gi (8Gi × 3 replicas, not in use)                              │
+│                                                                                │
+│   High Availability:                                                          │
+│   • Shlink: 3 replicas with Envoy sidecars                                    │
+│   • PostgreSQL: Primary + 2 read replicas                                     │
+│   • Redis: 3 + 3 (Sentinel, disabled due to Predis incompatibility)           │
+│   • K3s: 3-node control plane with embedded etcd                              │
+│                                                                                │
+│   Resource Efficiency:                                                        │
+│   • K3s overhead: ~1.5GB RAM total (vs 6-9GB for standard Kubernetes)         │
+│   • Available for workloads: ~60GB RAM on 64GB host                           │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                              KEY ACHIEVEMENTS                                  ║
+╠════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                ║
+║  ✓ GitOps-driven infrastructure (ArgoCD managing 13 applications)              ║
+║  ✓ Zero-code observability via Istio service mesh                             ║
+║  ✓ Complete observability stack (Prometheus, Grafana, Jaeger, Kiali)          ║
+║  ✓ High availability across all layers (app, DB, control plane)               ║
+║  ✓ Production-grade performance testing (k6 with realistic traffic models)    ║
+║  ✓ Comprehensive monitoring (ServiceMonitors for Istio metrics)               ║
+║  ✓ Distributed tracing with 100% sampling                                     ║
+║  ✓ Secrets management via External Secrets Operator → AWS                     ║
+║  ✓ Infrastructure as code (all manifests in Git)                              ║
+║  ✓ Operator-managed data layer (Crunchy PostgreSQL, Spotahome Redis)          ║
+║                                                                                ║
+║  Performance Results (Scenario 1 baseline):                                   ║
+║  • 100% success rate across 12,601 requests                                   ║
+║  • P50 latency: ~20ms, P99 latency: ~40-50ms                                  ║
+║  • Zero-downtime deployments with proper health checks                        ║
+║                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+Legend:
+  → : Data flow / direction
+  ↓ : Vertical flow
+  │ : Connection
+  ┌─┐: Component boundary
+  ═══: Major section separator
+  ×N : Replica count
+
+Version: 2.0 (Phase 6 Complete - December 30, 2024)
+Author: Manu B Sreekumari
+Project: URL Shortener SRE Lab
