@@ -7,33 +7,35 @@
 brew install k6  # macOS
 # OR for Linux, see: https://k6.io/docs/getting-started/installation/
 
-# 2. Set environment variables
-export BASE_URL="http://192.168.2.242"
-export SHLINK_API_KEY="your-api-key-here"
-
-# 3. Run a test
+# 2. Set up .env file (RECOMMENDED)
 cd load-tests
+cp .env.example .env
+# Edit .env and add your API key (see below for how to generate)
+
+# 3. Run tests using the automated script
+./run-tests.sh
+
+# OR run individual tests manually
+source .env  # Load environment variables
 k6 run --env BASE_URL=$BASE_URL --env SHLINK_API_KEY=$SHLINK_API_KEY scenario1-baseline.js
 ```
 
 ## Get Shlink API Key
 
-### Option 1: From Kubernetes (if deployed via ArgoCD)
+### Generate API Key (Recommended for Homelab)
 ```bash
-kubectl get secret -n shlink shlink-api-key -o jsonpath='{.data.api-key}' | base64 -d
+# Generate a new API key
+kubectl exec -n shlink deployment/shlink -c shlink -- /etc/shlink/bin/cli api-key:generate
+
+# Copy the generated key and add it to your .env file:
+# SHLINK_API_KEY=your-generated-key-here
 ```
 
-### Option 2: Generate New API Key
+### Alternative: Export as Environment Variable
 ```bash
-kubectl exec -n shlink deployment/shlink -- \
-  ./vendor/bin/shlink api-key:generate
+export BASE_URL="http://192.168.2.242"
+export SHLINK_API_KEY="your-api-key-here"
 ```
-
-### Option 3: Use Shlink Web UI
-1. Open http://192.168.2.242
-2. Login to Shlink admin panel
-3. Navigate to API Keys section
-4. Create new API key
 
 ## Test Scenarios Overview
 

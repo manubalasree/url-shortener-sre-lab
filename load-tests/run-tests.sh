@@ -17,6 +17,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
+# Load .env file if it exists
+if [ -f "${SCRIPT_DIR}/.env" ]; then
+    # Export variables from .env file
+    set -a
+    source "${SCRIPT_DIR}/.env"
+    set +a
+fi
+
 # Environment variables with defaults
 BASE_URL="${BASE_URL:-http://192.168.2.242}"
 SHLINK_API_KEY="${SHLINK_API_KEY:-}"
@@ -50,6 +58,16 @@ print_header() {
 check_prerequisites() {
     print_header "Checking Prerequisites"
 
+    # Check if .env file exists
+    if [ -f "${SCRIPT_DIR}/.env" ]; then
+        print_success ".env file found and loaded"
+    else
+        print_warning ".env file not found"
+        print_info "Create .env file from template:"
+        print_info "  cp .env.example .env"
+        print_info "  # Then edit .env and add your SHLINK_API_KEY"
+    fi
+
     # Check if k6 is installed
     if ! command -v k6 &> /dev/null; then
         print_error "k6 is not installed"
@@ -63,33 +81,20 @@ check_prerequisites() {
     # Check if BASE_URL is set
     if [ -z "$BASE_URL" ]; then
         print_error "BASE_URL is not set"
+        print_info "Set BASE_URL in .env file or export it:"
+        print_info "  export BASE_URL=http://192.168.2.242"
         exit 1
     fi
     print_success "BASE_URL: $BASE_URL"
 
     # Check if SHLINK_API_KEY is set
     if [ -z "$SHLINK_API_KEY" ]; then
-        print_warning "SHLINK_API_KEY is not set"
-        print_info "Attempting to retrieve from Kubernetes..."
-
-        if command -v kubectl &> /dev/null; then
-            # Try to get API key from Kubernetes secret
-            API_KEY=$(kubectl get secret -n shlink shlink-api-key -o jsonpath='{.data.api-key}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-
-            if [ -n "$API_KEY" ]; then
-                export SHLINK_API_KEY="$API_KEY"
-                print_success "Retrieved API key from Kubernetes"
-            else
-                print_error "Could not retrieve API key from Kubernetes"
-                print_info "Please set SHLINK_API_KEY environment variable"
-                print_info "Or create an API key:"
-                print_info "  kubectl exec -n shlink deployment/shlink -- ./vendor/bin/shlink api-key:generate"
-                exit 1
-            fi
-        else
-            print_error "kubectl not found and SHLINK_API_KEY not set"
-            exit 1
-        fi
+        print_error "SHLINK_API_KEY is not set"
+        print_info "Generate an API key and add it to .env file:"
+        print_info "  kubectl exec -n shlink deployment/shlink -c shlink -- /etc/shlink/bin/cli api-key:generate"
+        print_info "Then add the key to .env:"
+        print_info "  SHLINK_API_KEY=your-generated-key"
+        exit 1
     else
         print_success "SHLINK_API_KEY is set"
     fi
