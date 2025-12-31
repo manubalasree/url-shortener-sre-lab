@@ -5,7 +5,7 @@ namespace: istio-system
 
 resources:
   - telemetry.yaml
-  - istio-operator-patch.yaml
+  - configmap-patch-job.yaml
 
 commonLabels:
   app.kubernetes.io/component: telemetry
