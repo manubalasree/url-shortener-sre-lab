@@ -1,0 +1,25 @@
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: mesh-default
+  namespace: istio-system
+spec:
+  # Enable distributed tracing for all services in the mesh
+  tracing:
+    - providers:
+      - name: jaeger
+      # 100% sampling for testing/development
+      # In production, consider 1-10% sampling
+      randomSamplingPercentage: 100.0
+      customTags:
+        environment:
+          literal:
+            value: "k3s-lab"
+        cluster:
+          literal:
+            value: "url-shortener"
+
+  # Enable access logging to stdout for debugging
+  accessLogging:
+    - providers:
+      - name: envoy
