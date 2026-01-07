@@ -31,7 +31,7 @@ This project implements a highly available URL shortener service (Shlink) on a K
 - **URL Shortener**: Shlink v4.x (3 replicas) with custom phpredis image for high availability
 - **Database**: PostgreSQL via Crunchy Data Operator with 20Gi storage
 - **Cache**: Redis Sentinel with 3 replicas (8Gi each) - 98.97% cache hit rate achieved
-- **Secrets**: External Secrets Operator syncing from AWS Secrets Manager
+- **Secrets**: External Secrets Operator syncing from HashiCorp Vault
 - **TLS**: cert-manager v1.16.2 for certificate lifecycle management
 
 ### Observability
