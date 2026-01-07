@@ -57,11 +57,9 @@ spec:
               name: shlink-db-pguser-shlink
               key: password
 
-        # Redis Sentinel configuration with phpredis
+        # Redis configuration - Direct connection to master (Sentinel handles failover internally)
         - name: REDIS_SERVERS
-          value: "rfs-shlink-redis.redis.svc.cluster.local:26379"
-        - name: REDIS_SENTINEL_SERVICE
-          value: "mymaster"
+          value: "rfr-shlink-redis-0.rfr-shlink-redis.redis.svc.cluster.local:6379"
         - name: CACHE_NAMESPACE
           value: "shlink"
 
