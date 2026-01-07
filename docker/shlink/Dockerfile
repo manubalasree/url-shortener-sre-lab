@@ -45,8 +45,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 # Default command (inherited from base image)
 
 
----
-
 ### Step 3: Create .dockerignore
 
 **File: `docker/shlink/.dockerignore`**
