@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+*.md
+README.md
+kubernetes/
+load-tests/
+chaos-tests/
+docs/
+.vscode/
+.idea/
+*.log
+tmp/
