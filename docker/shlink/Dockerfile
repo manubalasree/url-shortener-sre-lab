@@ -35,12 +35,9 @@ RUN apk add --no-cache --virtual .build-deps \
 # Verify phpredis is installed
 RUN php -m | grep redis
 
-# Switch back to non-root user
-USER shlink
+# Note: User context inherited from base image
+# Base image will set appropriate user at runtime
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8080/rest/health || exit 1
-
-# Default command (inherited from base image)
-
