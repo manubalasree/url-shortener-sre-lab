@@ -6,9 +6,15 @@ A production-grade URL shortener deployment demonstrating site reliability engin
 
 This project implements a highly available URL shortener service (Shlink) on a K3s Kubernetes cluster with full observability, distributed tracing, and service mesh capabilities. It serves as a comprehensive demonstration of modern SRE practices including infrastructure as code, GitOps workflows, performance testing, and operational excellence.
 
+**Hardware**: Single Minisforum UM790 Pro mini PC (AMD Ryzen 9 7940HS, 64GB RAM) running Proxmox VE
+
+**Virtualization**: 3-node K3s cluster deployed as Proxmox VMs for true high availability
+
 **Status**: Phase 6 Complete - Load testing infrastructure ready, observability stack operational
 
 **Architecture**: K3s HA cluster with Istio service mesh, PostgreSQL database, Redis caching, and comprehensive observability (Prometheus, Grafana, Jaeger, Kiali)
+
+> **Homelab**: This entire production-grade infrastructure - including a 3-node Kubernetes HA cluster, service mesh, distributed databases, and comprehensive observability stack - runs on a single mini PC in my homelab. Using Proxmox VE for virtualization, I've created three separate VM nodes to demonstrate true Kubernetes high availability, showcasing the efficiency of K3s and modern containerized workloads on affordable hardware.
 
 ## Key Features
 
