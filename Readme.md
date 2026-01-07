@@ -1,6 +1,6 @@
 # URL Shortener SRE Lab
 
-A production-grade URL shortener deployment demonstrating site reliability engineering practices on Kubernetes with Istio service mesh, complete observability stack, and GitOps-based operations.
+A production-grade URL shortener deployment on Kubernetes with Istio service mesh, complete observability stack, and GitOps-based operations.
 
 ## Project Overview
 
