@@ -21,12 +21,12 @@ export const options = {
   ],
   thresholds: {
     // Redis cache should keep most responses fast
-    'http_req_duration': ['p95<100', 'p99<200'],
-    'cached_response_time': ['p95<50', 'p99<100'],    // Cache hits very fast
-    'uncached_response_time': ['p95<150'],            // DB queries slower
-    'cache_hit_rate': ['rate>0.80'],                  // >80% cache hits
-    'redirect_success_rate': ['rate>0.99'],           // >99% success
-    'http_req_failed': ['rate<0.01'],                 // <1% errors
+    'http_req_duration': ['p(95)<100', 'p(99)<200'],
+    'cached_response_time': ['p(95)<50', 'p(99)<100'],    // Cache hits very fast
+    'uncached_response_time': ['p(95)<150'],              // DB queries slower
+    'cache_hit_rate': ['rate>0.80'],                      // >80% cache hits
+    'redirect_success_rate': ['rate>0.99'],               // >99% success
+    'http_req_failed': ['rate<0.01'],                     // <1% errors
   },
 };
 
