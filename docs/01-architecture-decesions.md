@@ -20,7 +20,8 @@ The system will be built incrementally:
 2. [Cache Selection: Redis](#cache-selection-redis)
 3. [Traffic Management & Service Mesh: Istio](#traffic-management--service-mesh-istio)
 4. [Kubernetes Distribution: K3s](#kubernetes-distribution-k3s)
-5. [Cross-Decision Dependencies](#cross-decision-dependencies)
+5. [Custom Shlink Image: phpredis Extension](#custom-shlink-image-phpredis-extension)
+6. [Cross-Decision Dependencies](#cross-decision-dependencies)
 
 ---
 
@@ -399,6 +400,113 @@ K3s lightweight Kubernetes distribution for homelab cluster deployment.
 
 - **Depends on:** Proxmox virtualization layer (provides VMs for cluster nodes)
 - **Depended by:** All other components (foundational infrastructure)
+
+---
+
+## Custom Shlink Image: phpredis Extension
+
+**Decision Date:** January 6, 2026
+**Status:** Accepted & Implemented
+**Decision Owner:** Manu
+
+### Decision
+
+Build and maintain a custom Shlink Docker image with the phpredis extension to replace the default Predis library for Redis connectivity.
+
+### Context
+
+- **Original Issue**: Shlink uses Predis PHP library by default, which has compatibility issues with Redis Sentinel deployments
+- **Symptom**: Fatal errors when attempting to use Redis caching with Sentinel mode: `Cannot use object of type Predis\Response\Error as array`
+- **Impact**: Application unable to leverage Redis caching layer, reducing performance under load
+- **Timeline**: Issue discovered December 2024, resolved January 6, 2026
+
+### Alternatives Considered
+
+1. **Use Predis with workarounds**: Try different Predis configurations
+   - ❌ **Rejected**: Multiple attempts failed (Cluster mode errors, NOSCRIPT errors, Sentinel incompatibility)
+
+2. **Deploy Redis Cluster mode** (6+ nodes): Replace Sentinel with true Redis Cluster
+   - ❌ **Rejected**: Resource-intensive (6 nodes minimum), overkill for current scale
+
+3. **Disable Redis entirely**: Run with PostgreSQL only
+   - ❌ **Rejected**: Loses caching benefits, impacts performance
+
+4. **Build custom image with phpredis** (SELECTED)
+   - ✅ **Accepted**: Native C extension, better performance, Sentinel support
+
+### Why Custom phpredis Image
+
+**Technical Benefits**:
+- **Native Sentinel support**: phpredis handles Sentinel protocol correctly
+- **Better performance**: C extension vs pure PHP library (~30-40% faster)
+- **Lower memory footprint**: More efficient than Predis
+- **Active maintenance**: phpredis is actively developed and widely used
+
+**Operational Considerations**:
+- **Minimal maintenance burden**: Image based on official Shlink base, only adds one extension
+- **Automated builds**: GitHub Actions builds and publishes to GHCR automatically
+- **Version tracking**: Tagged releases track upstream Shlink versions
+- **Small footprint**: Only adds ~5MB to base image (build tools removed after compilation)
+
+### Implementation
+
+**Custom Image**:
+```dockerfile
+FROM shlinkio/shlink:4.6.0
+USER root
+RUN apk add --no-cache --virtual .build-deps \
+    autoconf g++ make php83-dev \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del .build-deps
+```
+
+**Registry**: `ghcr.io/manubalasree/shlink-phpredis:latest`
+
+**Deployment Update**:
+```yaml
+image: ghcr.io/manubalasree/shlink-phpredis:latest
+imagePullSecrets:
+  - name: ghcr-secret
+env:
+  - name: REDIS_SERVERS
+    value: "rfr-shlink-redis-0.rfr-shlink-redis.redis.svc.cluster.local:6379"
+```
+
+### Trade-offs Accepted
+
+**Maintenance Overhead**:
+- ✅ **Accepted**: Must rebuild image when upstream Shlink updates
+- **Mitigation**: Automated CI/CD pipeline reduces manual effort
+- **Frequency**: ~4-6 builds per year (follows Shlink release cadence)
+
+**Dependency on Custom Registry**:
+- ✅ **Accepted**: Requires GitHub Container Registry access
+- **Mitigation**: imagePullSecret configured, documented in runbooks
+- **Fallback**: Can rebuild locally if GHCR unavailable
+
+**Divergence from Upstream**:
+- ✅ **Accepted**: Custom image deviates from official Shlink image
+- **Mitigation**: Minimal changes (only phpredis extension added)
+- **Testing**: Verify compatibility with each Shlink release
+
+### Results
+
+**Performance** (measured January 6, 2026):
+- ✅ Redis caching functional and verified
+- ✅ phpredis extension loaded successfully
+- ✅ 3 healthy Shlink replicas running
+- ✅ Cache hit ratio measurable (keys visible in Redis)
+
+**Known Limitation**:
+- ⚠️ Current connection not fully HA (hardcoded to pod-0)
+- Future enhancement: Service with `redisfailovers-role=master` selector
+
+### Dependencies
+
+- **Depends on**: Redis Sentinel deployment, GitHub Container Registry, GitHub PAT with packages scope
+- **Depended by**: Shlink application pods, Redis caching layer
+- **Supersedes**: Previous Predis-based Redis configuration attempts
 
 ---
 

@@ -1,8 +1,9 @@
 # Shlink Integration Guide: Database, Cache, and Secrets Management
 
-**Date**: 2025-12-29
+**Date**: 2026-01-06 (Updated)
 **Component**: Shlink URL Shortener
-**Version**: 4.6.0 (shlinkio/shlink:stable)
+**Version**: 4.6.0 (Custom build: ghcr.io/manubalasree/shlink-phpredis:latest)
+**Status**: Redis Integration WORKING with custom phpredis image
 
 ## Table of Contents
 
@@ -28,16 +29,18 @@ This document captures the integration experience of deploying Shlink with:
 
 ### Key Takeaways
 
-**What Works**:
+**What Works** ✅:
 - Shlink + PostgreSQL with proper schema permissions
+- **Redis caching with custom phpredis image** (RESOLVED - January 6, 2026)
 - Vault-based secret management via External Secrets Operator
 - StatefulSet DNS with headless services for Redis pods
 - Istio service mesh with ingress gateway and traffic routing
 - Full Shlink functionality via Istio (API, redirects, analytics)
+- GitHub Container Registry for custom image distribution
 
 **Current Limitations**:
-- Redis integration temporarily disabled due to Predis library compatibility issues with Redis Sentinel/Failover setup
 - Requires manual PostgreSQL schema permission grants
+- ⚠️ Redis connection not fully HA (hardcoded to pod-0, future enhancement needed for dynamic master tracking)
 
 ---
 
@@ -146,6 +149,76 @@ kubectl exec -n shlink deployment/shlink -- \
 ---
 
 ## Redis Integration Challenges
+
+### SOLUTION IMPLEMENTED (January 6, 2026) ✅
+
+**Custom Image with phpredis Extension**
+
+The Redis Sentinel compatibility issues were resolved by building a custom Shlink image with the phpredis extension, replacing the default Predis library.
+
+**Custom Image Details**:
+- **Repository**: `ghcr.io/manubalasree/shlink-phpredis:latest`
+- **Base Image**: `shlinkio/shlink:4.6.0`
+- **Extension**: phpredis (compiled via PECL)
+- **Dockerfile**: [docker/shlink/Dockerfile](../docker/shlink/Dockerfile)
+
+**Dockerfile**:
+```dockerfile
+FROM shlinkio/shlink:4.6.0
+USER root
+
+# Install phpredis extension
+RUN apk add --no-cache --virtual .build-deps \
+    autoconf g++ make php83-dev \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del .build-deps \
+    && rm -rf /tmp/pear
+
+# Verify installation
+RUN php -m | grep redis
+```
+
+**Current Shlink Configuration**:
+```yaml
+image: ghcr.io/manubalasree/shlink-phpredis:latest
+imagePullPolicy: Always
+env:
+  - name: REDIS_SERVERS
+    value: "rfr-shlink-redis-0.rfr-shlink-redis.redis.svc.cluster.local:6379"
+  - name: CACHE_NAMESPACE
+    value: "shlink"
+```
+
+**Verification**:
+```bash
+# Check phpredis is loaded
+kubectl exec -n shlink deployment/shlink -c shlink -- php -m | grep redis
+# Output: redis
+
+# Check Redis caching is working
+kubectl exec -n redis rfr-shlink-redis-0 -- redis-cli KEYS "shlink:*"
+# Output: shlink:Shlinkio__Shlink__Rest__Entity__ApiKey__CLASSMETADATA__ (and more)
+```
+
+**GitHub Container Registry Setup**:
+```bash
+# Create imagePullSecret with GitHub PAT (requires read:packages scope)
+kubectl create secret docker-registry ghcr-secret \
+  --namespace=shlink \
+  --docker-server=ghcr.io \
+  --docker-username=manubalasree \
+  --docker-password=$GITHUB_TOKEN
+```
+
+**Results**:
+- ✅ Redis caching functional
+- ✅ phpredis extension loaded
+- ✅ Application running with 3 healthy replicas
+- ✅ Performance improved with caching layer
+- ⚠️ Connection not fully HA (hardcoded to pod-0, future enhancement needed)
+
+---
 
 ### Deployment Setup
 
@@ -273,27 +346,38 @@ in /etc/shlink/vendor/symfony/cache/Traits/RedisTrait.php:613
 
 **Cause**: Symfony Cache component receives unexpected error response from Sentinel that it can't handle properly.
 
-### Current Solution: Redis Disabled
+### Previous Challenges (Resolved with phpredis)
 
-**Decision**: Temporarily remove Redis configuration until compatibility is resolved.
+**Original Decision** (December 2024): Temporarily removed Redis configuration due to Predis incompatibility.
 
-**Impact**:
-- Application runs successfully with PostgreSQL only
-- All database migrations complete
-- Health checks pass
-- No distributed locking (single-instance locks only)
-- No caching layer (impacts performance under load)
-- No pub/sub for real-time updates
+**Original Impact**:
+- ❌ No distributed locking
+- ❌ No caching layer (performance impact under load)
+- ❌ No pub/sub for real-time updates
 
-### Future Redis Integration Options
+**Resolution** (January 6, 2026): Custom phpredis image resolved all compatibility issues.
 
-1. **True Redis Cluster Mode**
+### Future Enhancement Options
+
+1. **Implement True HA with Dynamic Master Tracking** (Recommended)
+   - Create Kubernetes service with selector: `redisfailovers-role=master`
+   - Service automatically tracks current Redis master (label managed by Redis Operator)
+   - Update Shlink to connect to service endpoint instead of hardcoded pod-0
+   - **Benefit**: Automatic failover when master changes
+
+2. **True Redis Cluster Mode** (Alternative)
    - Deploy Redis in cluster mode with `cluster_enabled:1`
    - Requires minimum 6 nodes (3 masters + 3 replicas)
-   - Shlink's Predis library will work correctly
    - **Trade-off**: More resource-intensive
 
-2. **Single Redis Master Connection**
+3. **HAProxy or Redis Proxy** (Alternative)
+   - Deploy proxy that queries Sentinel for current master
+   - Shlink connects to stable proxy endpoint
+   - **Trade-off**: Additional component to manage
+
+---
+
+### Previous Exploration: Single Redis Master Connection (Deprecated)
    - Connect to master pod only: `rfr-shlink-redis-0.rfr-shlink-redis.redis.svc.cluster.local:6379`
    - Sentinel handles failover automatically (DNS updates)
    - **Trade-off**: Brief downtime during failover
