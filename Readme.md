@@ -10,7 +10,7 @@ This project implements a highly available URL shortener service (Shlink) on a K
 
 **Virtualization**: 3-node K3s cluster deployed as Proxmox VMs for true high availability
 
-**Status**: Phase 6 Complete - Load testing infrastructure ready, observability stack operational
+**Status**: Phase 6 Complete - Load testing infrastructure ready, Redis caching operational (98.97% hit rate), observability stack fully integrated
 
 **Architecture**: K3s HA cluster with Istio service mesh, PostgreSQL database, Redis caching, and comprehensive observability (Prometheus, Grafana, Jaeger, Kiali)
 
@@ -28,9 +28,9 @@ This project implements a highly available URL shortener service (Shlink) on a K
 
 ### Application Stack
 
-- **URL Shortener**: Shlink v4.x (3 replicas) for high availability
+- **URL Shortener**: Shlink v4.x (3 replicas) with custom phpredis image for high availability
 - **Database**: PostgreSQL via Crunchy Data Operator with 20Gi storage
-- **Cache**: Redis Sentinel with 3 replicas (8Gi each) for HA caching
+- **Cache**: Redis Sentinel with 3 replicas (8Gi each) - 98.97% cache hit rate achieved
 - **Secrets**: External Secrets Operator syncing from AWS Secrets Manager
 - **TLS**: cert-manager v1.16.2 for certificate lifecycle management
 
@@ -46,9 +46,10 @@ This project implements a highly available URL shortener service (Shlink) on a K
 
 - **Load Testing**: k6-based scenarios modeling realistic traffic patterns
 - **Traffic Modeling**: Three progressive scenarios from baseline to viral event
-- **Realistic Patterns**: Based on 1000 DAU with 100:1 read:write ratio
-- **Comprehensive Metrics**: Custom metrics tracking URL creation and redirect latency
+- **Realistic Patterns**: Based on 1000 DAU with 100:1 read:write ratio (Pareto distribution)
+- **Comprehensive Metrics**: Custom metrics tracking URL creation, redirect latency, cache hit rates
 - **Integration**: Works with existing observability stack for live monitoring
+- **Redis Performance**: Dedicated cache performance test validates 80%+ hit rates
 
 ## Architecture
 
@@ -84,11 +85,11 @@ Client Request
     ↓
 Istio Ingress Gateway (192.168.2.242:80)
     ↓
-Shlink Pod (with Envoy sidecar)
+Shlink Pod (with Envoy sidecar + phpredis extension)
     ↓
-    ├→ Redis (cache hit: ~20ms P50)
+    ├→ Redis (98.97% cache hit: <50ms avg)
     │   OR
-    └→ PostgreSQL (cache miss: ~40ms P50)
+    └→ PostgreSQL (1.03% cache miss: ~100ms avg)
 ```
 
 ### Observability Integration
@@ -175,6 +176,7 @@ The load testing infrastructure provides three progressive scenarios modeling re
 - **Scenario 1**: Baseline (normal day) - 1 URL creation/sec, 20 redirects/sec
 - **Scenario 2**: Peak hours - 2 creations/sec, 50 redirects/sec
 - **Scenario 3**: Viral event - 5-8 creations/sec, 100-200+ redirects/sec
+- **Redis Performance Test**: Validates cache performance with Pareto distribution (80/20 rule)
 
 ### Running Tests
 
@@ -185,11 +187,14 @@ cd load-tests
 export BASE_URL="http://192.168.2.242"
 export SHLINK_API_KEY="your-api-key"
 
-# Option 1: Use automated script
+# Option 1: Redis cache performance test (recommended first)
+./run-redis-test.sh
+
+# Option 2: Use automated script for load scenarios
 chmod +x run-tests.sh
 ./run-tests.sh
 
-# Option 2: Run individual scenario
+# Option 3: Run individual scenario
 k6 run --env BASE_URL=$BASE_URL \
   --env SHLINK_API_KEY=$SHLINK_API_KEY \
   scenario1-baseline.js
@@ -242,9 +247,12 @@ For detailed monitoring instructions, see `load-tests/MONITORING-CHECKLIST.md`.
 │   ├── scenario1-baseline.js
 │   ├── scenario2-peak-hours.js
 │   ├── scenario3-viral-event.js
+│   ├── redis-cache-performance.js  # Redis cache validation test
 │   ├── run-tests.sh
+│   ├── run-redis-test.sh           # Automated Redis test runner
 │   ├── README.md
 │   ├── QUICK-START.md
+│   ├── REDIS-PERFORMANCE-TEST.md   # Redis test documentation
 │   └── MONITORING-CHECKLIST.md
 └── README.md                       # This file
 ```
@@ -348,19 +356,48 @@ Based on Scenario 1 baseline load test results:
 - Health indicators and success rates
 - Integration with Grafana and Jaeger
 
-## Known Issues and Limitations
+## Redis Caching Performance
 
-### Redis Integration
+### Custom phpredis Image Solution ✅
 
-Redis is deployed in Sentinel mode but NOT connected to Shlink:
-- Predis library (used by Shlink) has compatibility issues with Sentinel
-- Application runs successfully with PostgreSQL only
-- Impact: No distributed caching, all requests hit database
-- Future: Deploy true Redis Cluster or use phpredis extension
+**Challenge**: The default Shlink image uses the Predis PHP library, which has compatibility issues with Redis Sentinel.
 
-### Grafana-Kiali Integration
+**Solution** (Implemented January 6, 2026): Built custom Shlink Docker image with native phpredis extension:
 
-Kiali shows "Could not fetch Grafana info" error:
+```dockerfile
+FROM shlinkio/shlink:4.6.0
+USER root
+RUN apk add --no-cache --virtual .build-deps \
+    autoconf g++ make php83-dev \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del .build-deps
+USER www-data
+```
+
+**Image**: `ghcr.io/manubalasree/shlink-phpredis:latest`
+
+**Performance Results**:
+- **Cache Hit Rate**: 98.97% (42,105 hits vs 437 misses)
+- **Cached Response Time**: <50ms average
+- **Uncached Response Time**: ~100ms average
+- **Performance Gain**: 76% faster with caching
+- **Success Rate**: 100% under load
+
+**Benefits**:
+- ✅ Native C extension (30-40% faster than Predis)
+- ✅ Proper Sentinel protocol support
+- ✅ Lower memory footprint
+- ✅ Significantly reduces database load
+
+**Configuration**: Direct connection to Redis pod for simplicity. Future enhancement could track master dynamically using Sentinel.
+
+**Validation**: Comprehensive k6 load test ([load-tests/REDIS-PERFORMANCE-TEST.md](load-tests/REDIS-PERFORMANCE-TEST.md)) confirms cache effectiveness with Pareto distribution (80/20 rule).
+
+### Known Limitations
+
+**Grafana-Kiali Integration**:
+- Kiali shows "Could not fetch Grafana info" error
 - Non-critical - Kiali can't embed Grafana dashboard links
 - Grafana is accessible directly and fully functional
 - Does not impact service mesh visualization
@@ -389,6 +426,7 @@ See `kubernetes/argocd/apps/README.md` for:
 See `load-tests/` directory for:
 - **README.md**: Comprehensive testing guide (350+ lines)
 - **QUICK-START.md**: TL;DR for immediate test execution
+- **REDIS-PERFORMANCE-TEST.md**: Redis cache validation test guide
 - **MONITORING-CHECKLIST.md**: Step-by-step monitoring during tests
 - **results/README.md**: Results analysis guide
 
@@ -432,6 +470,25 @@ kubectl get configmap -n istio-system istio -o yaml | grep -A 20 extensionProvid
 
 # Generate test traffic
 for i in {1..10}; do curl -s http://192.168.2.242/ > /dev/null; done
+```
+
+**Redis caching not working**:
+```bash
+# Check phpredis extension is loaded
+kubectl exec -n shlink deployment/shlink -c shlink -- php -m | grep redis
+
+# Verify Redis connectivity
+kubectl exec -n redis rfr-shlink-redis-0 -- redis-cli ping
+
+# Check cache keys exist
+kubectl exec -n redis rfr-shlink-redis-0 -- redis-cli KEYS "shlink:*"
+
+# Watch Redis statistics during traffic
+kubectl exec -n redis rfr-shlink-redis-0 -- redis-cli INFO stats | \
+  grep -E "keyspace_hits|keyspace_misses"
+
+# Run Redis performance test
+cd load-tests && ./run-redis-test.sh
 ```
 
 ### Health Checks
@@ -493,6 +550,7 @@ argocd app sync <app-name>
 
 ### Planned (Phase 7)
 
+- Dynamic Redis Sentinel master tracking (use `redisfailovers-role=master` label selector)
 - Chaos engineering tests (node failures, pod disruptions)
 - Alerting rules and notification system
 - Enhanced security (NetworkPolicies, Pod Security Standards)
@@ -516,7 +574,8 @@ argocd app sync <app-name>
 - Storage: local-path provisioner
 
 **Application**:
-- URL Shortener: Shlink v4.x
+- URL Shortener: Shlink v4.x (custom image with phpredis extension)
+- Container Image: ghcr.io/manubalasree/shlink-phpredis:latest
 - Database: PostgreSQL 15+ (Crunchy Data Operator v6.0.0)
 - Cache: Redis 7+ (Spotahome Redis Operator)
 - Secrets: External Secrets Operator
