@@ -13,18 +13,24 @@ spec:
     metadata:
       labels:
         app: shlink
-        version: stable
+        version: v2
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
+
       containers:
       - name: shlink
-        image: shlinkio/shlink:stable
+        image: ghcr.io/manubalasree/shlink-phpredis:4.6.0
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
           name: http
           protocol: TCP
         env:
-        - name: SHELL_VERBOSITY
-          value: "3"
         - name: DEFAULT_DOMAIN
           value: "shlink.local"
         - name: IS_HTTPS_ENABLED
@@ -36,16 +42,32 @@ spec:
         - name: DB_PORT
           value: "5432"
         - name: DB_NAME
-          value: "shlink"
+          valueFrom:
+            secretKeyRef:
+              name: shlink-db-pguser-shlink
+              key: dbname
         - name: DB_USER
-          value: "shlink"
+          valueFrom:
+            secretKeyRef:
+              name: shlink-db-pguser-shlink
+              key: user
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
               name: shlink-db-pguser-shlink
               key: password
-        - name: GEOLITE_LICENSE_KEY
-          value: ""
+
+        # Redis Sentinel configuration with phpredis
+        - name: REDIS_SERVERS
+          value: "rfs-shlink-redis.redis.svc.cluster.local:26379"
+        - name: REDIS_SENTINEL_SERVICE
+          value: "mymaster"
+        - name: CACHE_NAMESPACE
+          value: "shlink"
+
+        - name: SHELL_VERBOSITY
+          value: "3"
+
         resources:
           requests:
             memory: "256Mi"
@@ -53,15 +75,21 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
+
         livenessProbe:
           httpGet:
             path: /rest/health
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
         readinessProbe:
           httpGet:
             path: /rest/health
             port: 8080
           initialDelaySeconds: 10
           periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
