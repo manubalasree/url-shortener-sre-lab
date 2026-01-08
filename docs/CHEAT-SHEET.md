@@ -924,5 +924,3 @@ kubectl get pods -A --no-headers | awk '{print $5, $1, $2}' | sort -rn
 - Jaeger: https://www.jaegertracing.io/docs/
 
 ---
-
-**Pro Tip**: Keep this cheat sheet open in a terminal window while working. Use `Ctrl+F` to quickly find commands you need.
