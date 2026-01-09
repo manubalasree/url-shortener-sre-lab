@@ -1,5 +1,7 @@
 # URL Shortener SRE Lab
 
+
+
 A production-grade URL shortener deployment on Kubernetes with Istio service mesh, complete observability stack, and GitOps-based operations.
 
 ## Project Overview
@@ -52,6 +54,8 @@ This project implements a highly available URL shortener service (Shlink) on a K
 - **Redis Performance**: Dedicated cache performance test validates 80%+ hit rates
 
 ## Architecture
+
+![URL Shortener Architecture](docs/url-shortener-v1.png)
 
 ### Cluster Layout
 
